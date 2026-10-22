@@ -49,7 +49,7 @@ h1{margin:0;font-size:21px;display:flex;align-items:center;gap:8px}
 .top{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);gap:16px}
 .panel{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;min-width:0}
 /* 레트로 PC 목업: 수집기 화면이 브라운관 안에서 돌아가는 느낌만(자세히 보는 용도 아님) */
-.live{display:grid;place-items:center;padding-block:18px 14px}
+.panel.live{display:grid;place-items:center;padding:6px 0;background:none;border:none}
 .retro{width:min(100%,380px);display:grid;justify-items:center}
 .case{width:100%;padding:16px 16px 22px;border-radius:16px 16px 12px 12px;
   background:linear-gradient(160deg,#e6dfcc,#cfc6af 70%,#bdb39a);box-shadow:inset 0 2px 0 #f4efe2,inset 0 -3px 0 #a99f86,0 10px 22px rgba(0,0,0,.18);position:relative}
@@ -60,12 +60,13 @@ h1{margin:0;font-size:21px;display:flex;align-items:center;gap:8px}
   filter:saturate(.75) contrast(1.15) brightness(.95);animation:pan 18s ease-in-out infinite alternate}
 @keyframes pan{from{transform:translate(0,0) scale(1)}to{transform:translate(-6%,-5%) scale(1.04)}}
 .crt::before{content:"";position:absolute;inset:0;z-index:2;pointer-events:none;
-  background:repeating-linear-gradient(to bottom,rgba(0,0,0,.28) 0 1px,transparent 1px 3px)}
+  background:repeating-linear-gradient(to bottom,rgba(0,0,0,.32) 0 2px,transparent 2px 5px)}
 .crt::after{content:"";position:absolute;inset:0;z-index:3;pointer-events:none;
   background:radial-gradient(120% 90% at 50% 40%,transparent 55%,rgba(0,0,0,.55));box-shadow:inset 0 0 0 1px rgba(255,255,255,.06)}
-.sweep{position:absolute;left:0;right:0;height:22%;z-index:4;pointer-events:none;
-  background:linear-gradient(to bottom,transparent,rgba(170,255,190,.10),transparent);animation:sweep 3.2s linear infinite}
-@keyframes sweep{from{top:-25%}to{top:105%}}
+.sweep{position:absolute;left:0;right:0;height:16%;z-index:4;pointer-events:none;
+  background:linear-gradient(to bottom,transparent,rgba(190,255,205,.30) 45%,rgba(220,255,230,.42) 55%,transparent);
+  mix-blend-mode:screen;animation:sweep 2.4s linear infinite}
+@keyframes sweep{from{top:-18%}to{top:102%}}
 .osd{position:absolute;z-index:5;left:10px;top:8px;font:10px/1 "Silkscreen",var(--mono);color:#ff5b52;letter-spacing:.08em;display:flex;gap:6px;align-items:center}
 .osd i{width:7px;height:7px;border-radius:50%;background:#ff3b30;animation:blink 1s steps(2) infinite}
 @keyframes blink{50%{opacity:0}}
@@ -174,7 +175,12 @@ a{color:var(--fg);text-underline-offset:3px}
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const STATE = {running:'수집 중', paused:'일시정지', waiting:'대기', bot_check:'잠시 휴식', error:'재시작 중', starting:'시작 중', stopped:'꺼짐'};
-let DATA = null, place = '', q = '';
+let DATA = null, place = '', q = '', FRAMES = [], fi = 0;
+// 최근 화면들을 번갈아 보여줌(수집기가 돌고 있다는 느낌)
+setInterval(() => {
+  if (!FRAMES.length || !$('.brand').classList.contains('on')) return;
+  fi = (fi + 1) % FRAMES.length; $('#live').src = FRAMES[fi];
+}, 1800);
 
 async function load(){
   try {
@@ -188,7 +194,10 @@ async function load(){
   $('#state').textContent = on ? (STATE[c.state] || '수집 중') : (fresh ? '꺼짐' : '연결 끊김');
   $('#state').className = 'pill ' + (on ? 'on' : 'warn');
   $('#upd').textContent = DATA.updated_at ? DATA.updated_at.slice(5,16).replace('T',' ') + ' 갱신' : '';
-  if (DATA.live) $('#live').src = DATA.live + '?t=' + Date.now();
+  FRAMES = (DATA.live_frames && DATA.live_frames.length ? DATA.live_frames : (DATA.live ? [DATA.live] : []))
+    .map(f => f + '?t=' + DATA.updated_at);
+  FRAMES.forEach(f => { const im = new Image(); im.src = f; });   // 미리 받아 두기
+  if (FRAMES.length && !$('#live').src) $('#live').src = FRAMES[0];
   $('#action').textContent = on ? '▶ ' + (c.action || '수집 중') : '■ 수집기 꺼짐';
   $('#nosig').hidden = !!on; $('#led').className = 'led' + (on ? ' on' : '');
   const t = DATA.today || {};
