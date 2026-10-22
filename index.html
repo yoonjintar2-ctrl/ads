@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>게잡머신 게재 현황</title>
+<title>게재나라</title>
 <meta name="robots" content="noindex">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
 <style>
 /* 레이아웃: 위에 수집기 상태와 실시간 화면, 아래 지면 필터와 광고 카드 피드. 모바일 1열 → 넓으면 다열 */
 :root{
@@ -23,10 +23,12 @@ body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.55 var(--sans);
 .wrap{max-width:1180px;margin:0 auto;display:grid;gap:18px}
 header{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 h1{margin:0;font-size:21px;display:flex;align-items:center;gap:8px}
-.dot{width:10px;height:10px;border-radius:50%;background:var(--sub)}
-.dot.on{background:var(--rec);box-shadow:0 0 0 4px color-mix(in srgb,var(--rec) 22%,transparent);animation:pulse 1.6s infinite}
-@keyframes pulse{50%{box-shadow:0 0 0 7px color-mix(in srgb,var(--rec) 8%,transparent)}}
-@media (prefers-reduced-motion:reduce){.dot.on{animation:none}}
+.brand{position:relative;line-height:0}
+.logo{height:44px;width:auto;display:block}
+.rec{position:absolute;right:-6px;top:-6px;width:12px;height:12px;border-radius:50%;background:var(--sub);border:2px solid var(--bg)}
+.rec.on{background:var(--rec);animation:pulse 1.6s infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 color-mix(in srgb,var(--rec) 45%,transparent)}50%{box-shadow:0 0 0 6px color-mix(in srgb,var(--rec) 0%,transparent)}}
+@media (prefers-reduced-motion:reduce){.rec.on{animation:none}}
 .pill{font-size:12px;font-weight:700;padding:2px 9px;border-radius:99px;background:var(--chip);color:var(--sub)}
 .pill.on{color:var(--ok);background:color-mix(in srgb,var(--ok) 14%,transparent)}
 .pill.warn{color:var(--warn);background:color-mix(in srgb,var(--warn) 16%,transparent)}
@@ -82,7 +84,14 @@ a{color:var(--fg);text-underline-offset:3px}
 <body>
 <div class="wrap">
   <header>
-    <h1><span class="dot" id="dot"></span>게잡머신 게재 현황</h1>
+    <h1 class="brand"><svg class="logo" viewBox="0 0 204 64" role="img" aria-label="게재나라">
+      <title>게재나라</title>
+      <g fill="none" stroke="var(--rec)" stroke-width="4" stroke-linecap="square">
+        <path d="M4 18V4h14M186 4h14v14M200 46v14h-14M18 60H4V46"/>
+      </g>
+      <text x="102" y="47" text-anchor="middle" font-family="'Black Han Sans','Apple SD Gothic Neo','Malgun Gothic',sans-serif"
+            font-size="42" letter-spacing="0" fill="var(--fg)">게재나라</text>
+      </svg><span class="rec" id="rec"></span></h1>
     <span class="pill" id="state">불러오는 중</span>
     <span class="upd" id="upd"></span>
   </header>
@@ -123,7 +132,7 @@ async function load(){
   const c = DATA.collector || {};
   const fresh = DATA.updated_at && (Date.now() - new Date(DATA.updated_at).getTime() < 20*60e3);
   const on = fresh && c.running;
-  $('#dot').className = 'dot' + (on ? ' on' : '');
+  $('#rec').className = 'rec' + (on ? ' on' : '');
   $('#state').textContent = on ? (STATE[c.state] || '수집 중') : (fresh ? '꺼짐' : '연결 끊김');
   $('#state').className = 'pill ' + (on ? 'on' : 'warn');
   $('#upd').textContent = DATA.updated_at ? DATA.updated_at.slice(5,16).replace('T',' ') + ' 갱신' : '';
