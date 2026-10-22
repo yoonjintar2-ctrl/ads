@@ -59,14 +59,13 @@ h1{margin:0;font-size:21px;display:flex;align-items:center;gap:8px}
 .crt img{position:absolute;inset:-8%;width:116%;height:116%;object-fit:cover;object-position:top left;
   filter:saturate(.75) contrast(1.15) brightness(.95);animation:pan 18s ease-in-out infinite alternate}
 @keyframes pan{from{transform:translate(0,0) scale(1)}to{transform:translate(-6%,-5%) scale(1.04)}}
+/* 옛날 모니터처럼 굵은 가로줄이 위에서 아래로 계속 흘러내림 */
 .crt::before{content:"";position:absolute;inset:0;z-index:2;pointer-events:none;
-  background:repeating-linear-gradient(to bottom,rgba(0,0,0,.32) 0 2px,transparent 2px 5px)}
+  background:repeating-linear-gradient(to bottom,rgba(0,0,0,.42) 0 3px,rgba(0,0,0,.08) 3px 5px,transparent 5px 9px);
+  background-size:100% 9px;animation:roll .9s linear infinite}
+@keyframes roll{from{background-position:0 0}to{background-position:0 9px}}
 .crt::after{content:"";position:absolute;inset:0;z-index:3;pointer-events:none;
   background:radial-gradient(120% 90% at 50% 40%,transparent 55%,rgba(0,0,0,.55));box-shadow:inset 0 0 0 1px rgba(255,255,255,.06)}
-.sweep{position:absolute;left:0;right:0;height:16%;z-index:4;pointer-events:none;
-  background:linear-gradient(to bottom,transparent,rgba(190,255,205,.30) 45%,rgba(220,255,230,.42) 55%,transparent);
-  mix-blend-mode:screen;animation:sweep 2.4s linear infinite}
-@keyframes sweep{from{top:-18%}to{top:102%}}
 .osd{position:absolute;z-index:5;left:10px;top:8px;font:10px/1 "Silkscreen",var(--mono);color:#ff5b52;letter-spacing:.08em;display:flex;gap:6px;align-items:center}
 .osd i{width:7px;height:7px;border-radius:50%;background:#ff3b30;animation:blink 1s steps(2) infinite}
 @keyframes blink{50%{opacity:0}}
@@ -78,7 +77,7 @@ h1{margin:0;font-size:21px;display:flex;align-items:center;gap:8px}
 .led.on{background:#3ee06b;box-shadow:0 0 6px #3ee06b}
 .neck{width:22%;height:16px;background:linear-gradient(#c3b9a0,#b1a78d)}
 .foot{width:52%;height:12px;border-radius:6px 6px 10px 10px;background:linear-gradient(#d4ccb6,#b3a98f);box-shadow:0 6px 10px rgba(0,0,0,.15)}
-@media (prefers-reduced-motion:reduce){.crt img,.sweep,.osd i,.brand.on .play{animation:none}}
+@media (prefers-reduced-motion:reduce){.crt img,.crt::before,.osd i,.brand.on .play{animation:none}}
 .board{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden}
 .board div{background:var(--card);padding:10px 12px}
 .board b{display:block;font-size:24px;font-variant-numeric:tabular-nums}
@@ -141,7 +140,6 @@ a{color:var(--fg);text-underline-offset:3px}
           <div class="bezel">
             <div class="crt">
               <img id="live" alt="">
-              <div class="sweep"></div>
               <div class="osd"><i></i>REC</div>
               <div class="ticker" id="action">불러오는 중…</div>
               <div class="nosignal" id="nosig" hidden>NO SIGNAL</div>
