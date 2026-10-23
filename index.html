@@ -194,22 +194,27 @@ function zshow(){ $('#zoom img').src = ZL[zi] || ''; const many = ZL.length > 1;
 (() => { let x0 = null; document.addEventListener('touchstart', e => { if (e.target.closest('#zoom')) x0 = e.touches[0].clientX; }, {passive:true});
   document.addEventListener('touchend', e => { if (x0 === null || ZL.length < 2) return; const dx = e.changedTouches[0].clientX - x0; x0 = null;
     if (Math.abs(dx) > 50) { zi = (zi + (dx < 0 ? 1 : -1) + ZL.length) % ZL.length; zshow(); } }, {passive:true}); })();
-const REPO = 'yoonjintar2-ctrl/ads';
-const SITE_VER = '110f9ea5d0';   // 사이트 갱신 때 자동으로 채워짐(새 버전이 올라오면 열린 페이지가 알아서 새로고침)
-async function loadFb(){
-  try {
-    const r = await fetch(`https://api.github.com/repos/${REPO}/issues?state=all&per_page=100`, {headers:{Accept:'application/vnd.github+json'}});
-    if (!r.ok) return;
-    FB = (await r.json()).filter(i => !i.pull_request && (i.title || '').startsWith('[피드백]')).map(i => ({ad: ((i.body || '').match(/ad:(\d+)/) || [])[1] || '',
-      text: ((i.body || '').split('\n---')[0] || '').trim(), done: i.state === 'closed', at: i.created_at, url: i.html_url, n: i.number}));
-    if (DATA) render();
-  } catch(e) {}
+const SITE_VER = 'ab536a9b8d';   // 사이트 갱신 때 자동으로 채워짐(새 버전이 올라오면 열린 페이지가 알아서 새로고침)
+const FB_TOPIC = 'gaejab-fb-0e6815c847ac';
+// 보낸 피드백은 PC가 받아 사이트에 반영할 때까지 이 기기에 임시로 보여줌
+function pendingFb(){ try { return JSON.parse(localStorage.getItem('gj_fb_pending') || '[]'); } catch(e) { return []; } }
+function savePending(l){ try { localStorage.setItem('gj_fb_pending', JSON.stringify(l.slice(-50))); } catch(e) {} }
+function loadFb(){
+  const srv = (DATA && DATA.feedback) || [];
+  const seen = new Set(srv.map(f => (f.ad || '') + '|' + f.text));
+  const pend = pendingFb().filter(f => !seen.has((f.ad || '') + '|' + f.text) && Date.now() - f.ts < 86400e3);
+  savePending(pend);
+  FB = srv.map(f => ({ad: f.ad, text: f.text, at: f.at, done: f.state === 'done', reply: f.reply}))
+    .concat(pend.map(f => ({ad: f.ad, text: f.text, at: new Date(f.ts).toISOString(), done: false, sending: true})));
 }
 function fbFor(id){ return FB.filter(f => String(f.ad) === String(id)); }
-function fbLink(a, text){
-  const title = a ? `[피드백] #${a.id} ${(a.advertiser || '').slice(0,30)} · ${a.label}` : '[피드백] 게재나라 전체';
-  const body = `${text}\n---\n${a ? `ad:${a.id}\n광고: ${a.advertiser || ''} / ${a.title || ''}\n지면: ${a.label}\n처음 확보: ${a.first_seen}\n` : 'ad:0\n'}사이트: ${location.origin}/`;
-  return `https://github.com/${REPO}/issues/new?labels=feedback&title=${encodeURIComponent(title)}&body=${encodeURIComponent(body)}`;
+function fbHtml(id){ return fbFor(id).map(f => `<div class="cm"><small><span class="st ${f.done ? 'done' : 'wait'}">${f.done ? '반영 완료' : (f.sending ? '등록됨 · 확인 대기' : '반영 대기')}</span> · ${esc((f.at || '').slice(5,16).replace('T',' '))}</small>${esc(f.text)}${f.reply ? `<div style="margin-top:4px;color:var(--sub)">↳ ${esc(f.reply)}</div>` : ''}</div>`).join(''); }
+async function sendFb(a, text){
+  const body = JSON.stringify({ad: a ? String(a.id) : '', label: a ? `${a.advertiser || ''} / ${a.title || ''} (${a.label})` : '전체', text});
+  const r = await fetch(`https://ntfy.sh/${FB_TOPIC}`, {method: 'POST', body});   // 로그인 없이 전송
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  const l = pendingFb(); l.push({ad: a ? String(a.id) : '', text, ts: Date.now()}); savePending(l);
+  loadFb();
 }
 // 최근 화면들을 번갈아 보여줌(수집기가 돌고 있다는 느낌)
 setInterval(() => {
@@ -221,6 +226,7 @@ async function load(){
   try {
     const r = await fetch('data/status.json?t=' + Date.now(), {cache:'no-store'});
     DATA = await r.json();
+    loadFb();
     if (DATA.site_ver && SITE_VER.indexOf('__') !== 0 && DATA.site_ver !== SITE_VER && !$('#dlg').open) { location.reload(); return; }
   } catch(e) { $('#state').textContent = '데이터를 불러오지 못했습니다'; return; }
   const c = DATA.collector || {};
@@ -280,15 +286,18 @@ function open(id){
       <figure class="land">${a.landing ? `<img loading="lazy" src="${esc(a.landing)}" data-z alt="랜딩 페이지"><figcaption>랜딩 페이지 (1회 클릭 증빙)</figcaption>` : '<figcaption>랜딩 캡처 없음</figcaption>'}</figure>
     </div>
     <div class="fb"><h3>피드백</h3>
-      ${fbFor(a.id).map(f => `<div class="cm"><small><span class="st ${f.done ? 'done' : 'wait'}">${f.done ? '반영 완료' : '반영 대기'}</span> · ${esc(f.at.slice(5,16).replace('T',' '))}</small>${esc(f.text)}</div>`).join('')}
+      <div id="fbList">${fbHtml(a.id)}</div>
       <textarea id="fbText" placeholder="이 광고·캡처에 대해 고칠 점을 적어 주세요 (예: 광고주명이 틀림, 제목이 잘림)"></textarea>
       <button type="button" id="fbSend">피드백 등록</button>
-      <div class="note">GitHub 이슈로 등록돼요(로그인 필요). 다음 업데이트 때 확인해서 반영하고 '반영 완료'로 바꿔둘게요.</div>
+      <div class="note" id="fbNote">로그인 없이 바로 등록돼요. 다음 업데이트 때 확인해서 반영하고 '반영 완료'로 바꿔둘게요.</div>
     </div>`;
   $('#dlg').showModal();
   $('#close').onclick = () => $('#dlg').close();
-  $('#fbSend').onclick = () => { const t = $('#fbText').value.trim(); if (!t) { $('#fbText').focus(); return; }
-    window.open(fbLink(a, t), '_blank', 'noopener'); };
+  $('#fbSend').onclick = async () => { const t = $('#fbText').value.trim(); if (!t) { $('#fbText').focus(); return; }
+    const btn = $('#fbSend'); btn.disabled = true; btn.textContent = '등록 중…';
+    try { await sendFb(a, t); $('#fbText').value = ''; $('#fbList').innerHTML = fbHtml(a.id); $('#fbNote').textContent = '등록됐어요. 확인 후 반영할게요.'; render(); }
+    catch(e) { $('#fbNote').textContent = '등록에 실패했어요. 잠시 후 다시 눌러 주세요. (' + e.message + ')'; }
+    btn.disabled = false; btn.textContent = '피드백 등록'; };
 }
 
 document.addEventListener('click', e => {
@@ -308,10 +317,11 @@ document.addEventListener('keydown', e => {
     zi = (zi + (e.key === 'ArrowRight' ? 1 : -1) + ZL.length) % ZL.length; zshow(); }
   if (e.key === 'Enter' && e.target.matches('.ad')) open(e.target.dataset.id);
 });
-$('#fbAll').onclick = e => { e.preventDefault(); const t = prompt('게재나라 전체에 대한 피드백을 적어 주세요'); if (t && t.trim()) window.open(fbLink(null, t.trim()), '_blank', 'noopener'); };
-load(); loadFb();
+$('#fbAll').onclick = async e => { e.preventDefault(); const t = prompt('게재나라 전체에 대한 피드백을 적어 주세요'); if (!t || !t.trim()) return;
+  try { await sendFb(null, t.trim()); alert('등록됐어요. 확인 후 반영할게요.'); } catch(err) { alert('등록에 실패했어요. 잠시 후 다시 시도해 주세요.'); } };
+load();
 setInterval(load, 60000);
-setInterval(loadFb, 300000);
+
 </script>
 </body>
 </html>
