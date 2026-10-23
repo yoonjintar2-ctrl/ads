@@ -103,6 +103,15 @@ button:focus-visible,input:focus-visible,.ad:focus-visible{outline:2px solid var
 .empty{color:var(--sub);text-align:center;padding:40px 0}
 dialog{border:none;border-radius:14px;padding:0;max-width:min(1100px,96vw);width:100%;background:var(--card);color:var(--fg)}
 dialog::backdrop{background:rgba(0,0,0,.6)}
+.fb{margin:14px 18px 18px;padding:14px;border:1px dashed var(--line,#444);border-radius:12px}
+.fb h3{margin:0 0 8px;font-size:14px}
+.fb textarea{width:100%;min-height:72px;box-sizing:border-box;border-radius:8px;border:1px solid var(--line,#444);background:transparent;color:inherit;padding:8px;font:inherit}
+.fb button{margin-top:8px}
+.fb .note{font-size:12px;color:var(--sub);margin-top:6px}
+.cm{font-size:13px;padding:8px 10px;border-radius:8px;background:rgba(127,127,127,.12);margin:6px 0}
+.cm small{color:var(--sub);display:block;margin-bottom:2px}
+.cm .st{font-weight:700}.cm .st.done{color:#2e9d5b}.cm .st.wait{color:#d08a00}
+.fbn{position:absolute;left:6px;top:6px;background:#d08a00;color:#fff;font-size:11px;border-radius:10px;padding:1px 7px}
 .sheet{padding:18px;display:grid;gap:14px}
 .sheet header button{margin-left:auto;font:inherit;border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:8px;padding:5px 12px;cursor:pointer}
 .sheet h2{margin:0;font-size:19px;overflow-wrap:anywhere}
@@ -131,6 +140,7 @@ a{color:var(--fg);text-underline-offset:3px}
       </svg><span class="word">게재나라</span><span class="rec" id="rec"></span></h1>
     <span class="pill" id="state">불러오는 중</span>
     <span class="upd" id="upd"></span>
+    <a class="upd" id="fbAll" href="#" style="color:inherit">💬 전체 피드백 남기기</a>
   </header>
 
   <section class="top">
@@ -173,7 +183,23 @@ a{color:var(--fg);text-underline-offset:3px}
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const STATE = {running:'수집 중', paused:'일시정지', waiting:'대기', bot_check:'잠시 휴식', error:'재시작 중', starting:'시작 중', stopped:'꺼짐'};
-let DATA = null, place = '', q = '', FRAMES = [], fi = 0;
+let DATA = null, place = '', q = '', FRAMES = [], fi = 0, FB = [];
+const REPO = 'yoonjintar2-ctrl/ads';
+async function loadFb(){
+  try {
+    const r = await fetch(`https://api.github.com/repos/${REPO}/issues?state=all&per_page=100`, {headers:{Accept:'application/vnd.github+json'}});
+    if (!r.ok) return;
+    FB = (await r.json()).filter(i => !i.pull_request && (i.title || '').startsWith('[피드백]')).map(i => ({ad: ((i.body || '').match(/ad:(\d+)/) || [])[1] || '',
+      text: ((i.body || '').split('\n---')[0] || '').trim(), done: i.state === 'closed', at: i.created_at, url: i.html_url, n: i.number}));
+    if (DATA) render();
+  } catch(e) {}
+}
+function fbFor(id){ return FB.filter(f => String(f.ad) === String(id)); }
+function fbLink(a, text){
+  const title = a ? `[피드백] #${a.id} ${(a.advertiser || '').slice(0,30)} · ${a.label}` : '[피드백] 게재나라 전체';
+  const body = `${text}\n---\n${a ? `ad:${a.id}\n광고: ${a.advertiser || ''} / ${a.title || ''}\n지면: ${a.label}\n처음 확보: ${a.first_seen}\n` : 'ad:0\n'}사이트: ${location.origin}/`;
+  return `https://github.com/${REPO}/issues/new?labels=feedback&title=${encodeURIComponent(title)}&body=${encodeURIComponent(body)}`;
+}
 // 최근 화면들을 번갈아 보여줌(수집기가 돌고 있다는 느낌)
 setInterval(() => {
   if (!FRAMES.length || !$('.brand').classList.contains('on')) return;
@@ -215,7 +241,7 @@ function render(){
   $('#feed').innerHTML = list.map(a => `
     <div class="ad" tabindex="0" data-id="${a.id}">
       <div class="th ${a.tall ? 'tall' : ''}">${a.frames[0] ? `<img loading="lazy" src="${esc(a.frames[0].src)}" alt="">` : ''}
-        <span class="cnt" title="오늘 노출 / 누적">${a.seen_today}/${a.seen_total}</span></div>
+        <span class="cnt" title="오늘 노출 / 누적">${a.seen_today}/${a.seen_total}</span>${fbFor(a.id).length ? `<span class="fbn">💬 ${fbFor(a.id).length}</span>` : ''}</div>
       <div class="bd"><span class="pl">${esc(a.label)}</span>
         <span class="adv">${esc(a.advertiser || '광고주 미상')}</span>
         <span class="ti">${esc(a.title)}</span>
@@ -240,9 +266,17 @@ function open(id){
         <dt>일별 노출</dt><dd><div class="days">${(a.daily || []).map(d => `<span>${d.day.slice(5)} · ${d.n}회</span>`).join('')}</div></dd>
       </dl>
       <figure class="land">${a.landing ? `<img loading="lazy" src="${esc(a.landing)}" data-z alt="랜딩 페이지"><figcaption>랜딩 페이지 (1회 클릭 증빙)</figcaption>` : '<figcaption>랜딩 캡처 없음</figcaption>'}</figure>
+    </div>
+    <div class="fb"><h3>피드백</h3>
+      ${fbFor(a.id).map(f => `<div class="cm"><small><span class="st ${f.done ? 'done' : 'wait'}">${f.done ? '반영 완료' : '반영 대기'}</span> · ${esc(f.at.slice(5,16).replace('T',' '))}</small>${esc(f.text)}</div>`).join('')}
+      <textarea id="fbText" placeholder="이 광고·캡처에 대해 고칠 점을 적어 주세요 (예: 광고주명이 틀림, 제목이 잘림)"></textarea>
+      <button type="button" id="fbSend">피드백 등록</button>
+      <div class="note">GitHub 이슈로 등록돼요(로그인 필요). 다음 업데이트 때 확인해서 반영하고 '반영 완료'로 바꿔둘게요.</div>
     </div>`;
   $('#dlg').showModal();
   $('#close').onclick = () => $('#dlg').close();
+  $('#fbSend').onclick = () => { const t = $('#fbText').value.trim(); if (!t) { $('#fbText').focus(); return; }
+    window.open(fbLink(a, t), '_blank', 'noopener'); };
 }
 
 document.addEventListener('click', e => {
@@ -257,8 +291,10 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape') $('#zoom').hidden = true;
   if (e.key === 'Enter' && e.target.matches('.ad')) open(e.target.dataset.id);
 });
-load();
+$('#fbAll').onclick = e => { e.preventDefault(); const t = prompt('게재나라 전체에 대한 피드백을 적어 주세요'); if (t && t.trim()) window.open(fbLink(null, t.trim()), '_blank', 'noopener'); };
+load(); loadFb();
 setInterval(load, 60000);
+setInterval(loadFb, 300000);
 </script>
 </body>
 </html>
