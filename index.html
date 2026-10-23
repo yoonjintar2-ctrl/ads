@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>게재나라</title>
 <meta name="description" content="유튜브 광고 게재 현황을 실시간으로 — 게재나라">
 <meta property="og:type" content="website">
@@ -103,6 +103,8 @@ button:focus-visible,input:focus-visible,.ad:focus-visible{outline:2px solid var
 .empty{color:var(--sub);text-align:center;padding:40px 0}
 dialog{border:none;border-radius:14px;padding:0;max-width:min(1100px,96vw);width:100%;background:var(--card);color:var(--fg)}
 dialog::backdrop{background:rgba(0,0,0,.6)}
+html,body{touch-action:pan-x pan-y}
+input,textarea,select{font-size:16px}
 .fb{margin:14px 18px 18px;padding:14px;border:1px dashed var(--line,#444);border-radius:12px}
 .fb h3{margin:0 0 8px;font-size:14px}
 .fb textarea{width:100%;min-height:72px;box-sizing:border-box;border-radius:8px;border:1px solid var(--line,#444);background:transparent;color:inherit;padding:8px;font:inherit}
@@ -194,7 +196,11 @@ function zshow(){ $('#zoom img').src = ZL[zi] || ''; const many = ZL.length > 1;
 (() => { let x0 = null; document.addEventListener('touchstart', e => { if (e.target.closest('#zoom')) x0 = e.touches[0].clientX; }, {passive:true});
   document.addEventListener('touchend', e => { if (x0 === null || ZL.length < 2) return; const dx = e.changedTouches[0].clientX - x0; x0 = null;
     if (Math.abs(dx) > 50) { zi = (zi + (dx < 0 ? 1 : -1) + ZL.length) % ZL.length; zshow(); } }, {passive:true}); })();
-const SITE_VER = 'ab536a9b8d';   // 사이트 갱신 때 자동으로 채워짐(새 버전이 올라오면 열린 페이지가 알아서 새로고침)
+// 모바일에서 페이지 확대·축소 막기(확대 보기 화면 안에서만 손가락 확대 허용)
+['gesturestart','gesturechange'].forEach(ev => document.addEventListener(ev, e => { if (!e.target.closest || !e.target.closest('#zoom')) e.preventDefault(); }, {passive:false}));
+document.addEventListener('touchmove', e => { if (e.touches.length > 1 && !e.target.closest('#zoom')) e.preventDefault(); }, {passive:false});
+(() => { let last = 0; document.addEventListener('touchend', e => { const n = Date.now(); if (n - last < 300 && !e.target.closest('#zoom, textarea, input')) e.preventDefault(); last = n; }, {passive:false}); })();
+const SITE_VER = '6fd1a05022';   // 사이트 갱신 때 자동으로 채워짐(새 버전이 올라오면 열린 페이지가 알아서 새로고침)
 const FB_TOPIC = 'gaejab-fb-0e6815c847ac';
 // 보낸 피드백은 PC가 받아 사이트에 반영할 때까지 이 기기에 임시로 보여줌
 function pendingFb(){ try { return JSON.parse(localStorage.getItem('gj_fb_pending') || '[]'); } catch(e) { return []; } }
