@@ -126,9 +126,8 @@ a{color:var(--fg);text-underline-offset:3px}
 .two{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 .days{display:flex;gap:6px;flex-wrap:wrap}
 .days span{background:var(--chip);border-radius:6px;padding:2px 8px;font-size:12.5px;font-variant-numeric:tabular-nums}
-dialog#zoom{width:100vw;height:100dvh;max-width:none;max-height:none;margin:0;padding:0;border:none;border-radius:0;background:rgba(0,0,0,.97);cursor:zoom-out;overflow:hidden}
-dialog#zoom[open]{display:flex;align-items:center;justify-content:center}
-dialog#zoom::backdrop{background:rgba(0,0,0,.6)}
+#zoom{position:fixed;inset:0;z-index:2147483000;background:#000;display:flex;align-items:center;justify-content:center;cursor:zoom-out;touch-action:pan-y pinch-zoom}
+#zoom[hidden]{display:none!important}
 #zoom img{max-width:100%;max-height:100%;object-fit:contain}
 #zoom .zb{position:absolute;border:none;background:rgba(255,255,255,.14);color:#fff;font-size:22px;width:44px;height:44px;border-radius:50%;cursor:pointer}
 #zoom .zx{top:12px;right:12px}#zoom .zp{left:10px;top:50%;transform:translateY(-50%)}#zoom .zn{right:10px;top:50%;transform:translateY(-50%)}
@@ -181,8 +180,8 @@ dialog#zoom::backdrop{background:rgba(0,0,0,.6)}
   <div class="feed" id="feed"></div>
 </div>
 
-<dialog id="dlg"><div class="sheet" id="sheet"></div></dialog>
-<dialog id="zoom"><img alt="확대 이미지"><button class="zb zx" type="button" aria-label="닫기">✕</button><button class="zb zp" type="button" aria-label="이전">‹</button><button class="zb zn" type="button" aria-label="다음">›</button><div class="zc"></div></dialog>
+<dialog id="dlg"><div class="sheet" id="sheet"></div><div id="zoom" hidden><img alt="확대 이미지"><button class="zb zx" type="button" aria-label="닫기">✕</button><button class="zb zp" type="button" aria-label="이전">‹</button><button class="zb zn" type="button" aria-label="다음">›</button><div class="zc"></div></div></dialog>
+
 
 <script>
 const $ = s => document.querySelector(s);
@@ -196,6 +195,7 @@ function zshow(){ $('#zoom img').src = ZL[zi] || ''; const many = ZL.length > 1;
   document.addEventListener('touchend', e => { if (x0 === null || ZL.length < 2) return; const dx = e.changedTouches[0].clientX - x0; x0 = null;
     if (Math.abs(dx) > 50) { zi = (zi + (dx < 0 ? 1 : -1) + ZL.length) % ZL.length; zshow(); } }, {passive:true}); })();
 const REPO = 'yoonjintar2-ctrl/ads';
+const SITE_VER = '110f9ea5d0';   // 사이트 갱신 때 자동으로 채워짐(새 버전이 올라오면 열린 페이지가 알아서 새로고침)
 async function loadFb(){
   try {
     const r = await fetch(`https://api.github.com/repos/${REPO}/issues?state=all&per_page=100`, {headers:{Accept:'application/vnd.github+json'}});
@@ -221,6 +221,7 @@ async function load(){
   try {
     const r = await fetch('data/status.json?t=' + Date.now(), {cache:'no-store'});
     DATA = await r.json();
+    if (DATA.site_ver && SITE_VER.indexOf('__') !== 0 && DATA.site_ver !== SITE_VER && !$('#dlg').open) { location.reload(); return; }
   } catch(e) { $('#state').textContent = '데이터를 불러오지 못했습니다'; return; }
   const c = DATA.collector || {};
   const fresh = DATA.updated_at && (Date.now() - new Date(DATA.updated_at).getTime() < 20*60e3);
@@ -251,7 +252,7 @@ function render(){
     (!k || [a.advertiser, a.title, a.landing_domain, a.cta].join(' ').toLowerCase().includes(k)));
   $('#feed').innerHTML = list.map(a => `
     <div class="ad" tabindex="0" data-id="${a.id}">
-      <div class="th ${a.tall ? 'tall' : ''}">${a.frames[0] ? `<img loading="lazy" src="${esc(a.frames[0].src)}" alt="">` : ''}
+      <div class="th ${a.tall ? 'tall' : ''}">${(a.thumb || a.frames[0]) ? `<img loading="lazy" src="${esc(a.thumb || a.frames[0].src)}" alt="">` : ''}
         <span class="cnt" title="오늘 노출 / 누적">${a.seen_today}/${a.seen_total}</span>${fbFor(a.id).length ? `<span class="fbn">💬 ${fbFor(a.id).length}</span>` : ''}</div>
       <div class="bd"><span class="pl">${esc(a.label)}</span>
         <span class="adv">${esc(a.advertiser || '광고주 미상')}</span>
@@ -292,16 +293,18 @@ function open(id){
 
 document.addEventListener('click', e => {
   const t = e.target;
-  if (t.matches('[data-z]')) { ZL = [...document.querySelectorAll('#sheet [data-z]')].map(i => i.src); zi = Math.max(0, ZL.indexOf(t.src)); zshow(); $('#zoom').showModal(); return; }
+  if (t.matches('[data-z]')) { ZL = [...document.querySelectorAll('#sheet [data-z]')].map(i => i.src); zi = Math.max(0, ZL.indexOf(t.src)); zshow(); $('#zoom').hidden = false; return; }
   if (t.closest('#zoom .zp')) { zi = (zi - 1 + ZL.length) % ZL.length; zshow(); return; }
   if (t.closest('#zoom .zn')) { zi = (zi + 1) % ZL.length; zshow(); return; }
-  if (t.closest('#zoom')) { $('#zoom').close(); return; }
+  if (t.closest('#zoom')) { $('#zoom').hidden = true; return; }
   const f = t.closest('#filters button'); if (f) { place = f.dataset.p; load(); return; }
   const c = t.closest('.ad'); if (c) open(c.dataset.id);
   if (t === $('#dlg')) $('#dlg').close();
 });
+$('#dlg').addEventListener('cancel', e => { if (!$('#zoom').hidden) { e.preventDefault(); $('#zoom').hidden = true; } });
+$('#dlg').addEventListener('close', () => { $('#zoom').hidden = true; });
 document.addEventListener('keydown', e => {
-  if ($('#zoom').open && ZL.length > 1 && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+  if (!$('#zoom').hidden && ZL.length > 1 && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
     zi = (zi + (e.key === 'ArrowRight' ? 1 : -1) + ZL.length) % ZL.length; zshow(); }
   if (e.key === 'Enter' && e.target.matches('.ad')) open(e.target.dataset.id);
 });
