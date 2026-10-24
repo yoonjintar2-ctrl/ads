@@ -35,6 +35,11 @@ body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.55 var(--sans);
 header{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 h1{margin:0;font-size:21px;display:flex;align-items:center;gap:8px}
 .brand{position:relative;display:flex;align-items:center;gap:10px;line-height:1}
+.logo{display:flex;flex-direction:column;gap:6px}
+.bw{font:600 12px/1 var(--mono);color:var(--sub);display:flex;align-items:center;gap:6px;min-height:12px}
+.bw .dots{display:inline-flex;gap:3px}.bw .dots i{width:8px;height:8px;border-radius:2px;background:var(--chip);display:inline-block}
+.bw .dots i.on{background:var(--ok)}
+.more{display:block;margin:6px 0 14px;font-size:13px;color:var(--sub)}
 .mark{width:40px;height:40px;display:block}
 .word{font-family:"Black Han Sans","Apple SD Gothic Neo","Malgun Gothic",sans-serif;font-size:38px;font-weight:400;letter-spacing:-.5px;color:var(--fg);transform:translateY(2px)}
 .rec{display:none}
@@ -140,10 +145,11 @@ a{color:var(--fg);text-underline-offset:3px}
 <body>
 <div class="wrap">
   <header>
-    <h1 class="brand" aria-label="게재나라"><svg class="mark" viewBox="0 0 64 64" aria-hidden="true">
+    <div class="logo"><h1 class="brand" aria-label="게재나라"><svg class="mark" viewBox="0 0 64 64" aria-hidden="true">
         <g fill="none" stroke="#E0312B" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22V9a3 3 0 0 1 3-3h13M42 6h13a3 3 0 0 1 3 3v13M58 42v13a3 3 0 0 1-3 3H42M22 58H9a3 3 0 0 1-3-3V42"/></g>
         <path class="play" d="M25 20.5v23a2 2 0 0 0 3 1.7l19-11.5a2 2 0 0 0 0-3.4l-19-11.5a2 2 0 0 0-3 1.7z" fill="#E0312B"/>
       </svg><span class="word">게재나라</span><span class="rec" id="rec"></span></h1>
+      <div class="bw" id="bw"></div></div>
     <span class="pill" id="state">불러오는 중</span>
     <span class="upd" id="upd"></span>
     <a class="upd" id="fbAll" href="#" style="color:inherit">💬 전체 피드백 남기기</a>
@@ -200,7 +206,7 @@ function zshow(){ $('#zoom img').src = ZL[zi] || ''; const many = ZL.length > 1;
 ['gesturestart','gesturechange'].forEach(ev => document.addEventListener(ev, e => { if (!e.target.closest || !e.target.closest('#zoom')) e.preventDefault(); }, {passive:false}));
 document.addEventListener('touchmove', e => { if (e.touches.length > 1 && !e.target.closest('#zoom')) e.preventDefault(); }, {passive:false});
 (() => { let last = 0; document.addEventListener('touchend', e => { const n = Date.now(); if (n - last < 300 && !e.target.closest('#zoom, textarea, input')) e.preventDefault(); last = n; }, {passive:false}); })();
-const SITE_VER = '6fd1a05022';   // 사이트 갱신 때 자동으로 채워짐(새 버전이 올라오면 열린 페이지가 알아서 새로고침)
+const SITE_VER = '47680f4243';   // 사이트 갱신 때 자동으로 채워짐(새 버전이 올라오면 열린 페이지가 알아서 새로고침)
 const FB_TOPIC = 'gaejab-fb-0e6815c847ac';
 // 보낸 피드백은 PC가 받아 사이트에 반영할 때까지 이 기기에 임시로 보여줌
 function pendingFb(){ try { return JSON.parse(localStorage.getItem('gj_fb_pending') || '[]'); } catch(e) { return []; } }
@@ -247,6 +253,8 @@ async function load(){
   FRAMES.forEach(f => { const im = new Image(); im.src = f; });   // 미리 받아 두기
   if (FRAMES.length && !$('#live').src) $('#live').src = FRAMES[0];
   $('#action').textContent = on ? '▶ ' + (c.action || '수집 중') : '■ 수집기 꺼짐';
+  const nb = on ? (c.browsers || 0) : 0, nt = Math.max(nb, c.browsers_target || 0, 1);
+  $('#bw').innerHTML = on && nb ? `<span class="dots">${Array.from({length: Math.max(nt, 5)}, (_, i) => `<i class="${i < nb ? 'on' : ''}"></i>`).join('')}</span>수집 브라우저 ${nb}개 가동 중` : (on ? '수집 브라우저 확인 중' : '수집 브라우저 0개');
   $('#nosig').hidden = !!on; $('#led').className = 'led' + (on ? ' on' : '');
   const t = DATA.today || {};
   $('#nAds').textContent = t.distinct_ads ?? 0; $('#nNew').textContent = t.new_ads ?? 0; $('#nAll').textContent = DATA.total_ads ?? 0;
@@ -258,26 +266,54 @@ async function load(){
   render();
 }
 
-function render(){
-  const k = q.trim().toLowerCase();
-  const list = (DATA.ads || []).filter(a => (!place || a.placement === place) &&
-    (!k || [a.advertiser, a.title, a.landing_domain, a.cta].join(' ').toLowerCase().includes(k)));
-  $('#feed').innerHTML = list.map(a => `
+let SEARCH = null, searchAt = 0;
+async function loadSearch(){
+  if (SEARCH && Date.now() - searchAt < 300e3) return SEARCH;
+  try { const r = await fetch('data/search.json?t=' + Date.now(), {cache: 'no-store'}); SEARCH = (await r.json()).ads || []; searchAt = Date.now(); }
+  catch(e) { SEARCH = SEARCH || []; }
+  return SEARCH;
+}
+function card(a){
+  const th = a.thumb || (a.frames && a.frames[0] && a.frames[0].src) || '';
+  const tall = a.tall ?? /mobile/.test(a.placement || '');
+  return `
     <div class="ad" tabindex="0" data-id="${a.id}">
-      <div class="th ${a.tall ? 'tall' : ''}">${(a.thumb || a.frames[0]) ? `<img loading="lazy" src="${esc(a.thumb || a.frames[0].src)}" alt="">` : ''}
-        <span class="cnt" title="오늘 노출 / 누적">${a.seen_today}/${a.seen_total}</span>${fbFor(a.id).length ? `<span class="fbn">💬 ${fbFor(a.id).length}</span>` : ''}</div>
+      <div class="th ${tall ? 'tall' : ''}">${th ? `<img loading="lazy" src="${esc(th)}" alt="">` : ''}
+        <span class="cnt" title="오늘 노출 / 누적">${a.seen_today != null ? a.seen_today + '/' : ''}${a.seen_total}</span>${fbFor(a.id).length ? `<span class="fbn">💬 ${fbFor(a.id).length}</span>` : ''}</div>
       <div class="bd"><span class="pl">${esc(a.label)}</span>
         <span class="adv">${esc(a.advertiser || '광고주 미상')}</span>
         <span class="ti">${esc(a.title)}</span>
-        <span class="dm">${esc(a.landing_domain || '')} · ${esc(a.first_seen.slice(5,16).replace('T',' '))}</span></div>
-    </div>`).join('') || '<p class="empty">아직 확보한 광고가 없습니다</p>';
+        <span class="dm">${esc(a.landing_domain || '')} · ${esc((a.first_seen || '').slice(5,16).replace('T',' '))}</span></div>
+    </div>`;
+}
+const match = (a, k) => [a.advertiser, a.title, a.landing_domain, a.cta, a.landing_url, a.label].join(' ').toLowerCase().includes(k);
+let renderSeq = 0;
+async function render(){
+  const k = q.trim().toLowerCase(), my = ++renderSeq;
+  if (!k) {
+    const list = (DATA.ads || []).filter(a => !place || a.placement === place);
+    $('#feed').innerHTML = list.map(card).join('') || '<p class="empty">아직 확보한 광고가 없습니다</p>';
+    return;
+  }
+  // 검색은 그동안 잡은 모든 광고에서 찾음(최근 300개만이 아니라)
+  const all = await loadSearch(); if (my !== renderSeq) return;
+  const recent = new Map((DATA.ads || []).map(a => [String(a.id), a]));
+  const hits = all.filter(a => (!place || a.placement === place) && match(a, k))
+    .map(a => recent.get(String(a.id)) || a);
+  $('#feed').innerHTML = `<span class="more">전체 ${all.length.toLocaleString()}개 광고 중 ${hits.length.toLocaleString()}개 일치</span>` +
+    (hits.slice(0, 300).map(card).join('') || '<p class="empty">일치하는 광고가 없습니다</p>');
 }
 
 function open(id){
-  const a = (DATA.ads || []).find(x => String(x.id) === String(id)); if (!a) return;
+  let a = (DATA.ads || []).find(x => String(x.id) === String(id));
+  if (!a) {   // 오래된 광고: 검색 색인 정보 + 대표 컷만
+    const s = (SEARCH || []).find(x => String(x.id) === String(id)); if (!s) return;
+    a = Object.assign({frames: s.thumb ? [{idx: 1, t: 0, src: s.thumb}] : [], landing: '', daily: [], context_url: '', ad_duration: 0, old: true}, s);
+  }
   $('#sheet').innerHTML = `
     <header><div><div style="color:var(--sub);font-size:12px">${esc(a.label)}</div><h2>${esc(a.advertiser || '광고주 미상')}</h2>
       <div>${esc(a.title)}</div></div><button id="close" type="button">닫기</button></header>
+    ${a.old ? '<p class="more">오래된 광고라 사이트에는 대표 컷만 있어요. 8컷 전체·랜딩 캡처는 PC 대시보드(게재나라 폴더)에 보관돼 있어요.</p>' : ''}
     <div class="frames">${a.frames.map(f => `<figure><img loading="lazy" src="${esc(f.src)}" data-z alt=""><figcaption>${f.idx}컷${f.t ? ' · ' + f.t.toFixed(1) + '초' : ''}</figcaption></figure>`).join('')}</div>
     <div class="two">
       <dl>
