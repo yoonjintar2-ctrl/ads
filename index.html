@@ -40,6 +40,12 @@ h1{margin:0;font-size:21px;display:flex;align-items:center;gap:8px}
 .bw .dots{display:inline-flex;gap:3px}.bw .dots i{width:8px;height:8px;border-radius:2px;background:var(--chip);display:inline-block}
 .bw .dots i.on{background:var(--ok)}
 .more{display:block;margin:6px 0 14px;font-size:13px;color:var(--sub)}
+.nothumb{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-size:12px;color:var(--sub);line-height:1.5}
+.nothumb small{font-size:11px;opacity:.8}
+.odbox{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:4px 18px 12px;padding:10px 12px;border-radius:10px;background:var(--chip);font-size:13px;color:var(--sub)}
+.odbox button{font:inherit;font-weight:700;border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:8px;padding:6px 12px;cursor:pointer}
+.spin{width:16px;height:16px;border-radius:50%;border:2px solid var(--line);border-top-color:var(--fg);animation:sp .8s linear infinite;flex:none}
+@keyframes sp{to{transform:rotate(360deg)}}
 .mark{width:40px;height:40px;display:block}
 .word{font-family:"Black Han Sans","Apple SD Gothic Neo","Malgun Gothic",sans-serif;font-size:38px;font-weight:400;letter-spacing:-.5px;color:var(--fg);transform:translateY(2px)}
 .rec{display:none}
@@ -206,7 +212,7 @@ function zshow(){ $('#zoom img').src = ZL[zi] || ''; const many = ZL.length > 1;
 ['gesturestart','gesturechange'].forEach(ev => document.addEventListener(ev, e => { if (!e.target.closest || !e.target.closest('#zoom')) e.preventDefault(); }, {passive:false}));
 document.addEventListener('touchmove', e => { if (e.touches.length > 1 && !e.target.closest('#zoom')) e.preventDefault(); }, {passive:false});
 (() => { let last = 0; document.addEventListener('touchend', e => { const n = Date.now(); if (n - last < 300 && !e.target.closest('#zoom, textarea, input')) e.preventDefault(); last = n; }, {passive:false}); })();
-const SITE_VER = '47680f4243';   // 사이트 갱신 때 자동으로 채워짐(새 버전이 올라오면 열린 페이지가 알아서 새로고침)
+const SITE_VER = 'f49fa32987';   // 사이트 갱신 때 자동으로 채워짐(새 버전이 올라오면 열린 페이지가 알아서 새로고침)
 const FB_TOPIC = 'gaejab-fb-0e6815c847ac';
 // 보낸 피드백은 PC가 받아 사이트에 반영할 때까지 이 기기에 임시로 보여줌
 function pendingFb(){ try { return JSON.parse(localStorage.getItem('gj_fb_pending') || '[]'); } catch(e) { return []; } }
@@ -267,6 +273,35 @@ async function load(){
 }
 
 let SEARCH = null, searchAt = 0;
+const OD = {};   // 불러온 고화질 원본(광고 id → 컷 목록)
+const OD_TOPIC = 'gaejab-od-493ef92c7cd1';
+async function odManifest(id){
+  try { const r = await fetch(`od/${id}.json?t=${Date.now()}`, {cache: 'no-store'}); return r.ok ? await r.json() : null; } catch(e) { return null; }
+}
+async function loadOriginals(a){
+  const box = $('#odBox'); if (!box) return;
+  const on = DATA && DATA.collector && DATA.collector.running;
+  box.innerHTML = '<span class="spin"></span><span id="odMsg">PC에서 고화질 원본을 가져오는 중이에요… (보통 1~2분)</span>';
+  let m = await odManifest(a.id);
+  if (!m) {
+    if (!on) { box.innerHTML = '<span>지금 PC 수집기가 꺼져 있어 불러올 수 없어요. PC가 켜지면 다시 눌러 주세요.</span>'; return; }
+    try { await fetch(`https://ntfy.sh/${OD_TOPIC}`, {method: 'POST', body: JSON.stringify({ad: String(a.id)})}); }
+    catch(e) { box.innerHTML = '<span>요청을 보내지 못했어요. 잠시 후 다시 눌러 주세요.</span>'; return; }
+    const t0 = Date.now();
+    while (!m && Date.now() - t0 < 300e3) {
+      await new Promise(r => setTimeout(r, 6000));
+      if (!$('#dlg').open) return;
+      const el = $('#odMsg'); if (el) el.textContent = `PC에서 고화질 원본을 가져오는 중이에요… ${Math.round((Date.now() - t0) / 1000)}초`;
+      m = await odManifest(a.id);
+    }
+  }
+  if (!m) { if ($('#odBox')) $('#odBox').innerHTML = '<span>시간이 오래 걸리고 있어요. 잠시 뒤 다시 열어 주세요.</span>'; return; }
+  if (m.missing || !m.frames.length) { if ($('#odBox')) $('#odBox').innerHTML = '<span>PC에도 이 광고의 원본 컷이 남아 있지 않아요.</span>'; return; }
+  // 사이트 반영 직후엔 이미지가 늦게 뜰 수 있어 미리 받아 둠
+  await Promise.all(m.frames.map(f => new Promise(r => { const im = new Image(); im.onload = im.onerror = r; im.src = f.src + '?t=' + Date.now(); })));
+  OD[String(a.id)] = m;
+  if ($('#dlg').open) open(a.id);
+}
 async function loadSearch(){
   if (SEARCH && Date.now() - searchAt < 300e3) return SEARCH;
   try { const r = await fetch('data/search.json?t=' + Date.now(), {cache: 'no-store'}); SEARCH = (await r.json()).ads || []; searchAt = Date.now(); }
@@ -278,7 +313,7 @@ function card(a){
   const tall = a.tall ?? /mobile/.test(a.placement || '');
   return `
     <div class="ad" tabindex="0" data-id="${a.id}">
-      <div class="th ${tall ? 'tall' : ''}">${th ? `<img loading="lazy" src="${esc(th)}" alt="">` : ''}
+      <div class="th ${tall ? 'tall' : ''}">${th ? `<img loading="lazy" src="${esc(th)}" alt="">` : '<div class="nothumb">썸네일 준비 중<br><small>열어서 원본 불러오기</small></div>'}
         <span class="cnt" title="오늘 노출 / 누적">${a.seen_today != null ? a.seen_today + '/' : ''}${a.seen_total}</span>${fbFor(a.id).length ? `<span class="fbn">💬 ${fbFor(a.id).length}</span>` : ''}</div>
       <div class="bd"><span class="pl">${esc(a.label)}</span>
         <span class="adv">${esc(a.advertiser || '광고주 미상')}</span>
@@ -308,13 +343,17 @@ function open(id){
   let a = (DATA.ads || []).find(x => String(x.id) === String(id));
   if (!a) {   // 오래된 광고: 검색 색인 정보 + 대표 컷만
     const s = (SEARCH || []).find(x => String(x.id) === String(id)); if (!s) return;
-    a = Object.assign({frames: s.thumb ? [{idx: 1, t: 0, src: s.thumb}] : [], landing: '', daily: [], context_url: '', ad_duration: 0, old: true}, s);
+    const od = OD[String(id)];
+    a = Object.assign({frames: s.thumb ? [{idx: 1, t: 0, src: s.thumb, low: true}] : [], landing: '', daily: [], context_url: '', ad_duration: 0, old: true}, s);
+    if (od) { a.frames = od.frames; a.landing = od.landing; a.old = false; a.od = true; }
   }
   $('#sheet').innerHTML = `
     <header><div><div style="color:var(--sub);font-size:12px">${esc(a.label)}</div><h2>${esc(a.advertiser || '광고주 미상')}</h2>
       <div>${esc(a.title)}</div></div><button id="close" type="button">닫기</button></header>
-    ${a.old ? '<p class="more">오래된 광고라 사이트에는 대표 컷만 있어요. 8컷 전체·랜딩 캡처는 PC 대시보드(게재나라 폴더)에 보관돼 있어요.</p>' : ''}
-    <div class="frames">${a.frames.map(f => `<figure><img loading="lazy" src="${esc(f.src)}" data-z alt=""><figcaption>${f.idx}컷${f.t ? ' · ' + f.t.toFixed(1) + '초' : ''}</figcaption></figure>`).join('')}</div>
+    ${a.old ? `<div class="odbox" id="odBox"><span>오래된 광고라 ${a.frames.length ? '저화질 미리보기 1컷만' : '미리보기 없이 정보만'} 보여요.</span>
+      <button type="button" id="odLoad">고화질 원본 불러오기</button></div>` : ''}
+    ${a.od ? '<p class="more">PC에서 불러온 고화질 원본이에요.</p>' : ''}
+    <div class="frames">${a.frames.map(f => `<figure><img loading="lazy" src="${esc(f.src)}" data-z alt=""><figcaption>${f.low ? '저화질 미리보기' : f.idx + '컷' + (f.t ? ' · ' + f.t.toFixed(1) + '초' : '')}</figcaption></figure>`).join('')}</div>
     <div class="two">
       <dl>
         <dt>버튼</dt><dd>${esc(a.cta) || '—'}</dd>
@@ -335,6 +374,7 @@ function open(id){
     </div>`;
   $('#dlg').showModal();
   $('#close').onclick = () => $('#dlg').close();
+  if ($('#odLoad')) $('#odLoad').onclick = () => loadOriginals(a);
   $('#fbSend').onclick = async () => { const t = $('#fbText').value.trim(); if (!t) { $('#fbText').focus(); return; }
     const btn = $('#fbSend'); btn.disabled = true; btn.textContent = '등록 중…';
     try { await sendFb(a, t); $('#fbText').value = ''; $('#fbList').innerHTML = fbHtml(a.id); $('#fbNote').textContent = '등록됐어요. 확인 후 반영할게요.'; render(); }
