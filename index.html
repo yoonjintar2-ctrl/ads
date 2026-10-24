@@ -44,6 +44,8 @@ h1{margin:0;font-size:21px;display:flex;align-items:center;gap:8px}
 .nothumb small{font-size:11px;opacity:.8}
 .odbox{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:4px 18px 12px;padding:10px 12px;border-radius:10px;background:var(--chip);font-size:13px;color:var(--sub)}
 .odbox button{font:inherit;font-weight:700;border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:8px;padding:6px 12px;cursor:pointer}
+.gauge{flex:1 1 100%;height:8px;border-radius:99px;background:var(--line);overflow:hidden}
+.gauge i{display:block;height:100%;width:0;background:var(--ok);border-radius:99px;transition:width .6s ease}
 .spin{width:16px;height:16px;border-radius:50%;border:2px solid var(--line);border-top-color:var(--fg);animation:sp .8s linear infinite;flex:none}
 @keyframes sp{to{transform:rotate(360deg)}}
 .mark{width:40px;height:40px;display:block}
@@ -61,7 +63,7 @@ h1{margin:0;font-size:21px;display:flex;align-items:center;gap:8px}
 .panel{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;min-width:0}
 /* 레트로 PC 목업: 수집기 화면이 브라운관 안에서 돌아가는 느낌만(자세히 보는 용도 아님) */
 .panel.live{display:grid;place-items:center;padding:6px 0;background:none;border:none}
-.retro{width:min(100%,380px);display:grid;justify-items:center}
+.retro{width:min(70%,266px);display:grid;justify-items:center}
 .case{width:100%;padding:16px 16px 22px;border-radius:16px 16px 12px 12px;
   background:linear-gradient(160deg,#e6dfcc,#cfc6af 70%,#bdb39a);box-shadow:inset 0 2px 0 #f4efe2,inset 0 -3px 0 #a99f86,0 10px 22px rgba(0,0,0,.18);position:relative}
 .bezel{background:#2b2a27;border-radius:14px;padding:12px;box-shadow:inset 0 0 0 3px #3a3834}
@@ -212,7 +214,7 @@ function zshow(){ $('#zoom img').src = ZL[zi] || ''; const many = ZL.length > 1;
 ['gesturestart','gesturechange'].forEach(ev => document.addEventListener(ev, e => { if (!e.target.closest || !e.target.closest('#zoom')) e.preventDefault(); }, {passive:false}));
 document.addEventListener('touchmove', e => { if (e.touches.length > 1 && !e.target.closest('#zoom')) e.preventDefault(); }, {passive:false});
 (() => { let last = 0; document.addEventListener('touchend', e => { const n = Date.now(); if (n - last < 300 && !e.target.closest('#zoom, textarea, input')) e.preventDefault(); last = n; }, {passive:false}); })();
-const SITE_VER = 'f49fa32987';   // 사이트 갱신 때 자동으로 채워짐(새 버전이 올라오면 열린 페이지가 알아서 새로고침)
+const SITE_VER = '88cde90d54';   // 사이트 갱신 때 자동으로 채워짐(새 버전이 올라오면 열린 페이지가 알아서 새로고침)
 const FB_TOPIC = 'gaejab-fb-0e6815c847ac';
 // 보낸 피드백은 PC가 받아 사이트에 반영할 때까지 이 기기에 임시로 보여줌
 function pendingFb(){ try { return JSON.parse(localStorage.getItem('gj_fb_pending') || '[]'); } catch(e) { return []; } }
@@ -281,24 +283,43 @@ async function odManifest(id){
 async function loadOriginals(a){
   const box = $('#odBox'); if (!box) return;
   const on = DATA && DATA.collector && DATA.collector.running;
-  box.innerHTML = '<span class="spin"></span><span id="odMsg">PC에서 고화질 원본을 가져오는 중이에요… (보통 1~2분)</span>';
   let m = await odManifest(a.id);
   if (!m) {
     if (!on) { box.innerHTML = '<span>지금 PC 수집기가 꺼져 있어 불러올 수 없어요. PC가 켜지면 다시 눌러 주세요.</span>'; return; }
+    box.innerHTML = '<span class="spin"></span><span id="odMsg">요청 보내는 중…</span><div class="gauge"><i id="odBar"></i></div>';
+    const t0 = Date.now(), since = Math.floor(t0 / 1000) - 5;
     try { await fetch(`https://ntfy.sh/${OD_TOPIC}`, {method: 'POST', body: JSON.stringify({ad: String(a.id)})}); }
     catch(e) { box.innerHTML = '<span>요청을 보내지 못했어요. 잠시 후 다시 눌러 주세요.</span>'; return; }
-    const t0 = Date.now();
-    while (!m && Date.now() - t0 < 300e3) {
-      await new Promise(r => setTimeout(r, 6000));
-      if (!$('#dlg').open) return;
-      const el = $('#odMsg'); if (el) el.textContent = `PC에서 고화질 원본을 가져오는 중이에요… ${Math.round((Date.now() - t0) / 1000)}초`;
-      m = await odManifest(a.id);
+    // 단계: 요청 전송 → PC가 받음 → 원본 올리는 중 → 사이트 반영 대기 → 완료
+    const STAGE = {sent: [12, 'PC에 요청 보냄 · 응답 기다리는 중'], received: [25, 'PC가 요청을 받았어요'],
+                   uploading: [45, 'PC가 고화질 원본을 올리는 중'], pushed: [70, '업로드 완료 · 사이트에 반영되는 중(1분 안팎)']};
+    let stage = 'sent', stageAt = Date.now();
+    const show = () => {
+      const [base, label] = STAGE[stage], next = {sent: 25, received: 45, uploading: 70, pushed: 97}[stage];
+      const sec = (Date.now() - stageAt) / 1000, pct = base + (next - base) * (1 - Math.exp(-sec / (stage === 'pushed' ? 45 : 15)));
+      const bar = $('#odBar'), msg = $('#odMsg');
+      if (bar) bar.style.width = pct.toFixed(1) + '%';
+      if (msg) msg.textContent = `${label} · ${Math.round((Date.now() - t0) / 1000)}초`;
+    };
+    const tick = setInterval(show, 500); show();
+    let n = 0;
+    while (!m && Date.now() - t0 < 420e3) {
+      await new Promise(r => setTimeout(r, 3000));
+      if (!$('#dlg').open) { clearInterval(tick); return; }
+      try {   // PC 진행 신호 확인
+        const t = await fetch(`https://ntfy.sh/${OD_TOPIC}-ack/json?poll=1&since=${since}`).then(r => r.text());
+        const order = ['sent', 'received', 'uploading', 'pushed'];
+        t.split('\n').forEach(l => { try { const ev = JSON.parse(l); const b = JSON.parse(ev.message || '{}');
+          if (String(b.ad) === String(a.id) && order.indexOf(b.stage) > order.indexOf(stage)) { stage = b.stage; stageAt = Date.now(); } } catch(e) {} });
+      } catch(e) {}
+      if (stage === 'pushed' || ++n % 3 === 0) m = await odManifest(a.id);
     }
+    clearInterval(tick);
+    if (m && $('#odBar')) { $('#odBar').style.width = '100%'; if ($('#odMsg')) $('#odMsg').textContent = '완료! 불러오는 중…'; }
   }
   if (!m) { if ($('#odBox')) $('#odBox').innerHTML = '<span>시간이 오래 걸리고 있어요. 잠시 뒤 다시 열어 주세요.</span>'; return; }
   if (m.missing || !m.frames.length) { if ($('#odBox')) $('#odBox').innerHTML = '<span>PC에도 이 광고의 원본 컷이 남아 있지 않아요.</span>'; return; }
-  // 사이트 반영 직후엔 이미지가 늦게 뜰 수 있어 미리 받아 둠
-  await Promise.all(m.frames.map(f => new Promise(r => { const im = new Image(); im.onload = im.onerror = r; im.src = f.src + '?t=' + Date.now(); })));
+  await Promise.all(m.frames.map(f => new Promise(r => { const im = new Image(); im.onload = im.onerror = r; im.src = f.src; })));
   OD[String(a.id)] = m;
   if ($('#dlg').open) open(a.id);
 }
