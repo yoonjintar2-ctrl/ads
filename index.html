@@ -109,7 +109,11 @@ button:focus-visible,input:focus-visible,.ad:focus-visible{outline:2px solid var
 .ad .th img{width:100%;height:100%;object-fit:contain;display:block}
 .ad .cnt{position:absolute;right:6px;bottom:6px;background:var(--rec);color:#fff;font-size:12px;font-weight:800;padding:1px 7px;border-radius:4px;font-variant-numeric:tabular-nums}
 .ad .bd{padding:10px 12px;display:grid;gap:2px;min-width:0}
-.ad .pl{font-size:11.5px;font-weight:700;color:var(--sub)}
+.ad .pl{justify-self:start;font-size:12px;font-weight:800;color:#fff;background:var(--plc,#555);padding:3px 9px;border-radius:6px;margin-bottom:4px;letter-spacing:-.01em}
+.filters .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:1px;background:var(--plc)}
+.p-youtube_instream{--plc:#E0312B}.p-youtube_infeed{--plc:#F08A24}.p-youtube_mobile_instream{--plc:#2F6FE0}.p-youtube_mobile_infeed{--plc:#0E9F9A}.p-youtube_mobile_shorts{--plc:#8A3FD1}
+.ad .pl.p-youtube_instream{--plc:#E0312B}.ad .pl.p-youtube_infeed{--plc:#F08A24}
+.ad .pl.p-youtube_mobile_instream{--plc:#2F6FE0}.ad .pl.p-youtube_mobile_infeed{--plc:#0E9F9A}.ad .pl.p-youtube_mobile_shorts{--plc:#8A3FD1}
 .ad .adv{font-weight:800;overflow-wrap:anywhere}
 .ad .ti{font-size:13px;color:var(--sub);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .ad .dm{font-family:var(--mono);font-size:11.5px;color:var(--sub);margin-top:4px}
@@ -214,7 +218,7 @@ function zshow(){ $('#zoom img').src = ZL[zi] || ''; const many = ZL.length > 1;
 ['gesturestart','gesturechange'].forEach(ev => document.addEventListener(ev, e => { if (!e.target.closest || !e.target.closest('#zoom')) e.preventDefault(); }, {passive:false}));
 document.addEventListener('touchmove', e => { if (e.touches.length > 1 && !e.target.closest('#zoom')) e.preventDefault(); }, {passive:false});
 (() => { let last = 0; document.addEventListener('touchend', e => { const n = Date.now(); if (n - last < 300 && !e.target.closest('#zoom, textarea, input')) e.preventDefault(); last = n; }, {passive:false}); })();
-const SITE_VER = '88cde90d54';   // 사이트 갱신 때 자동으로 채워짐(새 버전이 올라오면 열린 페이지가 알아서 새로고침)
+const SITE_VER = 'e0f0246d12';   // 사이트 갱신 때 자동으로 채워짐(새 버전이 올라오면 열린 페이지가 알아서 새로고침)
 const FB_TOPIC = 'gaejab-fb-0e6815c847ac';
 // 보낸 피드백은 PC가 받아 사이트에 반영할 때까지 이 기기에 임시로 보여줌
 function pendingFb(){ try { return JSON.parse(localStorage.getItem('gj_fb_pending') || '[]'); } catch(e) { return []; } }
@@ -268,7 +272,7 @@ async function load(){
   $('#nAds').textContent = t.distinct_ads ?? 0; $('#nNew').textContent = t.new_ads ?? 0; $('#nAll').textContent = DATA.total_ads ?? 0;
   $('#place').innerHTML = (DATA.placements || []).map(p => `<div><span>${esc(p.label)}</span><b>${p.ads}개 · 오늘 ${p.today}회</b></div>`).join('');
   $('#filters').innerHTML = `<button data-p="" class="${place===''?'on':''}">전체</button>` +
-    (DATA.placements || []).map(p => `<button data-p="${esc(p.key)}" class="${place===p.key?'on':''}">${esc(p.label)}</button>`).join('') +
+    (DATA.placements || []).map(p => `<button data-p="${esc(p.key)}" class="${place===p.key?'on':''}"><i class="dot p-${esc(p.key)}"></i>${esc(p.label)}</button>`).join('') +
     `<input id="q" type="search" placeholder="광고주·브랜드·문구 검색" value="${esc(q)}">`;
   $('#q').oninput = e => { q = e.target.value; render(); };
   render();
@@ -336,7 +340,7 @@ function card(a){
     <div class="ad" tabindex="0" data-id="${a.id}">
       <div class="th ${tall ? 'tall' : ''}">${th ? `<img loading="lazy" src="${esc(th)}" alt="">` : '<div class="nothumb">썸네일 준비 중<br><small>열어서 원본 불러오기</small></div>'}
         <span class="cnt" title="오늘 노출 / 누적">${a.seen_today != null ? a.seen_today + '/' : ''}${a.seen_total}</span>${fbFor(a.id).length ? `<span class="fbn">💬 ${fbFor(a.id).length}</span>` : ''}</div>
-      <div class="bd"><span class="pl">${esc(a.label)}</span>
+      <div class="bd"><span class="pl p-${esc(a.placement)}">${esc(a.label)}</span>
         <span class="adv">${esc(a.advertiser || '광고주 미상')}</span>
         <span class="ti">${esc(a.title)}</span>
         <span class="dm">${esc(a.landing_domain || '')} · ${esc((a.first_seen || '').slice(5,16).replace('T',' '))}</span></div>
