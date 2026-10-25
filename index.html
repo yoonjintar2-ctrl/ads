@@ -343,7 +343,7 @@ const goHome = () => { history.scrollRestoration = 'manual'; history.replaceStat
 $('#home').onclick = goHome; $('#home').onkeydown = e => { if (e.key === 'Enter') goHome(); };
 refreshMe();
 
-const SITE_VER = '10185cbc06';   // 사이트 갱신 때 자동으로 채워짐(새 버전이 올라오면 열린 페이지가 알아서 새로고침)
+const SITE_VER = 'f7b81e2e4b';   // 사이트 갱신 때 자동으로 채워짐(새 버전이 올라오면 열린 페이지가 알아서 새로고침)
 const FB_TOPIC = 'gaejab-fb-0e6815c847ac';
 // 보낸 피드백은 PC가 받아 사이트에 반영할 때까지 이 기기에 임시로 보여줌
 function pendingFb(){ try { return JSON.parse(localStorage.getItem('gj_fb_pending') || '[]'); } catch(e) { return []; } }
@@ -419,8 +419,15 @@ async function loadOriginals(a){
     if (!ACC.me) { openAcc.after = () => loadOriginals(a); openAcc('고화질 원본 불러오기는 로그인 후 30P로 이용할 수 있어요.'); return; }
     box.innerHTML = '<span class="spin"></span><span id="odMsg">요청 보내는 중…</span><div class="gauge"><i id="odBar"></i></div>';
     const t0 = Date.now(), since = Math.floor(t0 / 1000) - 5;
-    try { const j = await api('/api/od', {ad: String(a.id)}); ACC.me = j.me; renderAcc(); toast(`-${j.cost}P · 원본을 불러올게요`); }
+    let saved = null; try { saved = JSON.parse(localStorage.getItem('gj_od_' + a.id) || 'null'); } catch(e) {}
+    if (saved && Date.now() - saved.at < 3300e3) return relayOriginals(a, saved.req, saved.token, t0);   // 1시간 안에 다시 열면 이어 받기
+    let jr;
+    try { jr = await api('/api/od', {ad: String(a.id)}); ACC.me = jr.me; renderAcc(); toast(`-${jr.cost}P · 원본을 불러올게요`); }
     catch(e) { box.innerHTML = `<span>${esc(e.message)}</span>` + (e.status === 402 ? ' <a href="join.html" class="joinlink">포인트 모으기 →</a>' : ''); return; }
+    if (jr.token) {
+      try { localStorage.setItem('gj_od_' + a.id, JSON.stringify({req: jr.req, token: jr.token, at: Date.now()})); } catch(e) {}
+      return relayOriginals(a, jr.req, jr.token, t0);
+    }
     // 단계: 요청 전송 → PC가 받음 → 원본 올리는 중 → 사이트 반영 대기 → 완료
     const STAGE = {sent: [12, 'PC에 요청 보냄 · 응답 기다리는 중'], received: [25, 'PC가 요청을 받았어요'],
                    uploading: [45, 'PC가 고화질 원본을 올리는 중'], pushed: [70, '업로드 완료 · 사이트에 반영되는 중(1분 안팎)']};
@@ -450,6 +457,35 @@ async function loadOriginals(a){
   }
   if (!m) { if ($('#odBox')) $('#odBox').innerHTML = '<span>시간이 오래 걸리고 있어요. 잠시 뒤 다시 열어 주세요.</span>'; return; }
   if (m.missing || !m.frames.length) { if ($('#odBox')) $('#odBox').innerHTML = '<span>PC에도 이 광고의 원본 컷이 남아 있지 않아요.</span>'; return; }
+  await Promise.all(m.frames.map(f => new Promise(r => { const im = new Image(); im.onload = im.onerror = r; im.src = f.src; })));
+  OD[String(a.id)] = m;
+  if ($('#dlg').open) open(a.id);
+}
+// 새 방식: PC가 서버에 잠깐(1시간) 맡겨 둔 원본을 내 브라우저로 바로 받음(사이트 저장소에 남지 않음)
+async function relayOriginals(a, rid, tok, t0){
+  const base = `${API}/api/od/${rid}/${tok}`, fileUrl = n => `${API}/api/odfile/${rid}/${tok}/${n}`;
+  const bar = () => $('#odBar'), msg = () => $('#odMsg');
+  let st = null, fake = 8;
+  while (Date.now() - t0 < 300e3) {
+    if (!$('#dlg').open) return;
+    try { st = await fetch(base, {cache: 'no-store'}).then(r => r.json()); } catch(e) { st = null; }
+    const sec = Math.round((Date.now() - t0) / 1000);
+    if (st && st.ok === false) { try { localStorage.removeItem('gj_od_' + a.id); } catch(e) {} if ($('#odBox')) $('#odBox').innerHTML = '<span>요청이 만료됐어요. 다시 눌러 주세요.</span>'; return; }
+    if (st && st.state === 'refunded') { if ($('#odBox')) $('#odBox').innerHTML = '<span>PC에 이 광고의 원본이 없어 포인트를 돌려드렸어요.</span>'; refreshMe(); return; }
+    if (st && st.state === 'done') break;
+    let pct, label;
+    if (st && st.state === 'uploading' && st.total) { pct = 30 + 65 * st.got / st.total; label = `PC가 원본 보내는 중 ${st.got}/${st.total}`; }
+    else { fake = Math.min(28, fake + 2); pct = fake; label = 'PC에 요청 보냄 · 응답 기다리는 중'; }
+    if (bar()) bar().style.width = pct.toFixed(0) + '%';
+    if (msg()) msg().textContent = `${label} · ${sec}초`;
+    await new Promise(r => setTimeout(r, 1500));
+  }
+  if (!st || st.state !== 'done' || !st.manifest) { if ($('#odBox')) $('#odBox').innerHTML = '<span>PC가 바빠서 시간이 걸리고 있어요. 1시간 안에 이 광고를 다시 열면 포인트 추가 차감 없이 이어서 받아요.</span>'; return; }
+  const m = st.manifest;
+  if (m.missing || !m.frames.length) { if ($('#odBox')) $('#odBox').innerHTML = '<span>PC에도 이 광고의 원본 컷이 남아 있지 않아요.</span>'; return; }
+  m.frames = m.frames.map(f => Object.assign({}, f, {src: fileUrl(f.name)}));
+  m.landing = m.landing ? fileUrl(m.landing) : '';
+  if (bar()) bar().style.width = '100%'; if (msg()) msg().textContent = '완료! 불러오는 중…';
   await Promise.all(m.frames.map(f => new Promise(r => { const im = new Image(); im.onload = im.onerror = r; im.src = f.src; })));
   OD[String(a.id)] = m;
   if ($('#dlg').open) open(a.id);

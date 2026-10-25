@@ -39,7 +39,10 @@ CREATE INDEX IF NOT EXISTS od_status ON od_requests(status, id);
 CREATE TABLE IF NOT EXISTS signup_rl (ip_hash TEXT, at TEXT);
 CREATE TABLE IF NOT EXISTS sightings (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT, ad_key TEXT, placement TEXT, context TEXT, at TEXT);
 CREATE TABLE IF NOT EXISTS config (k TEXT PRIMARY KEY, v TEXT);
-CREATE TABLE IF NOT EXISTS agents_live (aid TEXT PRIMARY KEY, user_id TEXT, state TEXT, at TEXT);`;
+CREATE TABLE IF NOT EXISTS agents_live (aid TEXT PRIMARY KEY, user_id TEXT, state TEXT, at TEXT);
+CREATE TABLE IF NOT EXISTS od_share (req_id INTEGER PRIMARY KEY, token TEXT, state TEXT, total INTEGER DEFAULT 0, manifest TEXT, at TEXT);
+CREATE TABLE IF NOT EXISTS od_files (id INTEGER PRIMARY KEY AUTOINCREMENT, req_id INTEGER, name TEXT, data BLOB, at TEXT);
+CREATE INDEX IF NOT EXISTS od_files_req ON od_files(req_id, name);`;
 let schemaReady = false;
 async function ensureSchema(db) {
   if (schemaReady) return;
@@ -168,11 +171,26 @@ export default {
         const adId = parseInt(ad, 10); if (!adId) return E(req, "잘못된 요청이에요");
         const r = await db.prepare("UPDATE users SET points = points - ? WHERE id = ? AND points >= ?").bind(POINTS.od_cost, a.user_id, POINTS.od_cost).run();
         if (!r.meta.changes) return E(req, `포인트가 부족해요(원본 불러오기 ${POINTS.od_cost}P)`, 402);
-        await db.batch([
-          db.prepare("INSERT INTO ledger (user_id, delta, reason, ref, at) VALUES (?,?,?,?,?)").bind(a.user_id, -POINTS.od_cost, "od", String(adId), now()),
-          db.prepare("INSERT INTO od_requests (user_id, ad_id, status, created) VALUES (?,?, 'pending', ?)").bind(a.user_id, adId, now()),
-        ]);
-        return J(req, { ok: true, cost: POINTS.od_cost, me: await me(db, a.user_id) });
+        await db.prepare("INSERT INTO ledger (user_id, delta, reason, ref, at) VALUES (?,?,?,?,?)").bind(a.user_id, -POINTS.od_cost, "od", String(adId), now()).run();
+        const ins = await db.prepare("INSERT INTO od_requests (user_id, ad_id, status, created) VALUES (?,?, 'pending', ?)").bind(a.user_id, adId, now()).run();
+        const rid = ins.meta.last_row_id, token = rand(16);
+        await db.prepare("INSERT INTO od_share (req_id, token, state, at) VALUES (?,?, 'pending', ?)").bind(rid, token, now()).run();
+        return J(req, { ok: true, cost: POINTS.od_cost, req: rid, token, me: await me(db, a.user_id) });
+      }
+      // 고화질 원본 전달(중앙 PC가 잠깐 맡겨 둔 이미지를 요청한 사람 브라우저로 바로 · 1시간 뒤 서버에서 자동 삭제)
+      let om = p.match(/^\/api\/od\/(\d+)\/([a-f0-9]{32})$/);
+      if (om) {
+        const sh = await db.prepare("SELECT state, total, manifest FROM od_share WHERE req_id = ? AND token = ?").bind(+om[1], om[2]).first();
+        if (!sh) return E(req, "만료됐거나 없는 요청이에요", 404);
+        const got = await db.prepare("SELECT COUNT(*) n FROM od_files WHERE req_id = ?").bind(+om[1]).first();
+        return J(req, { ok: true, state: sh.state, total: sh.total, got: got.n, manifest: sh.manifest ? JSON.parse(sh.manifest) : null });
+      }
+      om = p.match(/^\/api\/odfile\/(\d+)\/([a-f0-9]{32})\/((?:0[1-9]|landing)\.jpg)$/);
+      if (om) {
+        const ok = await db.prepare("SELECT 1 FROM od_share WHERE req_id = ? AND token = ?").bind(+om[1], om[2]).first();
+        const f = ok && await db.prepare("SELECT data FROM od_files WHERE req_id = ? AND name = ? ORDER BY id DESC").bind(+om[1], om[3]).first();
+        if (!f) return E(req, "없음", 404);
+        return new Response(new Uint8Array(f.data), { headers: { "Content-Type": "image/jpeg", "Cache-Control": "private, max-age=3600", ...cors(req) } });
       }
 
       // ── 참여자 수집기 ─────────────────────────
@@ -258,8 +276,31 @@ export default {
           return J(req, { ok: true });
         }
         if (p === "/api/admin/od") {
+          const old = new Date(Date.now() - 3600e3).toISOString();
+          if (Math.random() < 0.05) await db.batch([db.prepare("DELETE FROM od_files WHERE at < ?").bind(old),
+                          db.prepare("DELETE FROM od_share WHERE at < ?").bind(new Date(Date.now() - 2 * 3600e3).toISOString())]);
           const r = await db.prepare("SELECT id, ad_id FROM od_requests WHERE status = 'pending' ORDER BY id LIMIT 10").all();
           return J(req, { ok: true, items: r.results });
+        }
+        m = p.match(/^\/api\/admin\/od\/(\d+)\/start$/);
+        if (m && req.method === "POST") {
+          const { total } = await req.json();
+          await db.prepare("UPDATE od_share SET state = 'uploading', total = ? WHERE req_id = ?").bind(+total || 0, +m[1]).run();
+          return J(req, { ok: true, relay: true });
+        }
+        m = p.match(/^\/api\/admin\/od\/(\d+)\/file\/((?:0[1-9]|landing)\.jpg)$/);
+        if (m && req.method === "POST") {
+          const buf = await req.arrayBuffer(); const b = new Uint8Array(buf);
+          if (buf.byteLength > LIMITS.fileMax || b[0] !== 0xff || b[1] !== 0xd8) return E(req, "이미지가 올바르지 않아요");
+          await db.prepare("INSERT INTO od_files (req_id, name, data, at) VALUES (?,?,?,?)").bind(+m[1], m[2], buf, now()).run();
+          return J(req, { ok: true });
+        }
+        m = p.match(/^\/api\/admin\/od\/(\d+)\/ready$/);
+        if (m && req.method === "POST") {
+          const { manifest } = await req.json();
+          await db.batch([db.prepare("UPDATE od_share SET state = 'done', manifest = ? WHERE req_id = ?").bind(JSON.stringify(manifest || {}).slice(0, 20000), +m[1]),
+                          db.prepare("UPDATE od_requests SET status = 'done' WHERE id = ?").bind(+m[1])]);
+          return J(req, { ok: true });
         }
         m = p.match(/^\/api\/admin\/od\/(\d+)\/(done|refund)$/);
         if (m && req.method === "POST") {
@@ -267,6 +308,7 @@ export default {
           if (!row) return E(req, "없음", 404);
           await db.prepare("UPDATE od_requests SET status = ? WHERE id = ?").bind(m[2], +m[1]).run();
           if (m[2] === "refund" && row.status === "pending") await addPoints(db, row.user_id, POINTS.od_cost, "od_refund", m[1]);
+          if (m[2] === "refund") await db.prepare("UPDATE od_share SET state = 'refunded' WHERE req_id = ?").bind(+m[1]).run();
           return J(req, { ok: true });
         }
         if (p === "/api/admin/sightings") {
