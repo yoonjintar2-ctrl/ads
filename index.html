@@ -176,7 +176,10 @@ input,textarea,select{font-size:16px}
 .cm .st{font-weight:700}.cm .st.done{color:#2e9d5b}.cm .st.wait{color:#d08a00}
 .fbn{position:absolute;left:6px;top:6px;background:#d08a00;color:#fff;font-size:11px;border-radius:10px;padding:1px 7px}
 .sheet{padding:18px;display:grid;gap:14px}
-.sheet header button{margin-left:auto;font:inherit;border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:8px;padding:5px 12px;cursor:pointer}
+.sheet header{display:flex!important;align-items:flex-start;gap:12px;flex-wrap:nowrap!important}
+.sheet header>div{flex:1;min-width:0}
+.sheet header button{all:unset;flex-shrink:0;margin-left:auto;cursor:pointer;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:var(--chip);color:var(--fg)}
+.sheet header button svg{width:16px;height:16px;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;fill:none}
 .sheet h2{margin:0;font-size:19px;overflow-wrap:anywhere}
 .frames{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
 .frames.tall{grid-template-columns:repeat(4,minmax(0,1fr))}
@@ -343,7 +346,7 @@ const goHome = () => { history.scrollRestoration = 'manual'; history.replaceStat
 $('#home').onclick = goHome; $('#home').onkeydown = e => { if (e.key === 'Enter') goHome(); };
 refreshMe();
 
-const SITE_VER = 'f7b81e2e4b';   // 사이트 갱신 때 자동으로 채워짐(새 버전이 올라오면 열린 페이지가 알아서 새로고침)
+const SITE_VER = '77f6dd7ba2';   // 사이트 갱신 때 자동으로 채워짐(새 버전이 올라오면 열린 페이지가 알아서 새로고침)
 const FB_TOPIC = 'gaejab-fb-0e6815c847ac';
 // 보낸 피드백은 PC가 받아 사이트에 반영할 때까지 이 기기에 임시로 보여줌
 function pendingFb(){ try { return JSON.parse(localStorage.getItem('gj_fb_pending') || '[]'); } catch(e) { return []; } }
@@ -537,7 +540,7 @@ function open(id){
   }
   $('#sheet').innerHTML = `
     <header><div><div style="color:var(--sub);font-size:12px">${esc(a.label)}</div><h2>${esc(a.advertiser || '광고주 미상')}</h2>
-      <div>${esc(a.title)}</div></div><button id="close" type="button">닫기</button></header>
+      <div>${esc(a.title)}</div></div><button id="close" type="button" aria-label="닫기"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></header>
     ${a.old ? `<div class="odbox" id="odBox"><span>오래된 광고라 ${a.frames.length ? '저화질 미리보기 1컷만' : '미리보기 없이 정보만'} 보여요.</span>
       <button type="button" id="odLoad">고화질 원본 불러오기 · 30P</button></div>` : ''}
     ${a.od ? '<p class="more">PC에서 불러온 고화질 원본이에요.</p>' : ''}
