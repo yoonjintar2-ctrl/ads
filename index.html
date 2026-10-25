@@ -202,7 +202,7 @@ a{color:var(--fg);text-underline-offset:3px}
 <div class="wrap">
   <header>
     <div class="hrow">
-      <h1 class="brand" aria-label="게재나라"><svg class="mark" viewBox="0 0 64 64" aria-hidden="true">
+      <h1 class="brand" aria-label="게재나라" id="home" role="link" tabindex="0" title="처음으로" style="cursor:pointer"><svg class="mark" viewBox="0 0 64 64" aria-hidden="true">
         <g fill="none" stroke="#E0312B" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22V9a3 3 0 0 1 3-3h13M42 6h13a3 3 0 0 1 3 3v13M58 42v13a3 3 0 0 1-3 3H42M22 58H9a3 3 0 0 1-3-3V42"/></g>
         <path class="play" d="M25 20.5v23a2 2 0 0 0 3 1.7l19-11.5a2 2 0 0 0 0-3.4l-19-11.5a2 2 0 0 0-3 1.7z" fill="#E0312B"/>
       </svg><span class="word">게재나라</span><span class="rec" id="rec"></span></h1>
@@ -339,9 +339,11 @@ function openAcc(msg, mode){
   if (!$('#accDlg').open) $('#accDlg').showModal();
 }
 $('#accBtn').onclick = () => openAcc();
+const goHome = () => { history.scrollRestoration = 'manual'; history.replaceState(null, '', location.pathname.replace(/[^/]*$/, '')); scrollTo(0, 0); location.reload(); };
+$('#home').onclick = goHome; $('#home').onkeydown = e => { if (e.key === 'Enter') goHome(); };
 refreshMe();
 
-const SITE_VER = '78a8f53f1f';   // 사이트 갱신 때 자동으로 채워짐(새 버전이 올라오면 열린 페이지가 알아서 새로고침)
+const SITE_VER = '91ae2221d9';   // 사이트 갱신 때 자동으로 채워짐(새 버전이 올라오면 열린 페이지가 알아서 새로고침)
 const FB_TOPIC = 'gaejab-fb-0e6815c847ac';
 // 보낸 피드백은 PC가 받아 사이트에 반영할 때까지 이 기기에 임시로 보여줌
 function pendingFb(){ try { return JSON.parse(localStorage.getItem('gj_fb_pending') || '[]'); } catch(e) { return []; } }
