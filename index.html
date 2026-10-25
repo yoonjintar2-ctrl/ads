@@ -178,6 +178,7 @@ input,textarea,select{font-size:16px}
 .sheet{padding:18px;display:grid;gap:14px}
 .sheet header{display:flex!important;align-items:flex-start;gap:12px;flex-wrap:nowrap!important}
 .sheet header>div{flex:1;min-width:0}
+.aka{font-size:.72em;font-weight:600;color:var(--sub);margin-left:4px}
 .sheet header button{all:unset;flex-shrink:0;margin-left:auto;cursor:pointer;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:var(--chip);color:var(--fg)}
 .sheet header button svg{width:16px;height:16px;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;fill:none}
 .sheet h2{margin:0;font-size:19px;overflow-wrap:anywhere}
@@ -346,7 +347,7 @@ const goHome = () => { history.scrollRestoration = 'manual'; history.replaceStat
 $('#home').onclick = goHome; $('#home').onkeydown = e => { if (e.key === 'Enter') goHome(); };
 refreshMe();
 
-const SITE_VER = '77f6dd7ba2';   // 사이트 갱신 때 자동으로 채워짐(새 버전이 올라오면 열린 페이지가 알아서 새로고침)
+const SITE_VER = '7a8d5fec89';   // 사이트 갱신 때 자동으로 채워짐(새 버전이 올라오면 열린 페이지가 알아서 새로고침)
 const FB_TOPIC = 'gaejab-fb-0e6815c847ac';
 // 보낸 피드백은 PC가 받아 사이트에 반영할 때까지 이 기기에 임시로 보여줌
 function pendingFb(){ try { return JSON.parse(localStorage.getItem('gj_fb_pending') || '[]'); } catch(e) { return []; } }
@@ -507,12 +508,12 @@ function card(a){
       <div class="th ${tall ? 'tall' : ''}">${th ? `<img loading="lazy" src="${esc(th)}" alt="">` : '<div class="nothumb">썸네일 준비 중<br><small>열어서 원본 불러오기</small></div>'}
         <span class="cnt" title="오늘 노출 / 누적">${a.seen_today != null ? a.seen_today + '/' : ''}${a.seen_total}</span>${fbFor(a.id).length ? `<span class="fbn">💬 ${fbFor(a.id).length}</span>` : ''}</div>
       <div class="bd"><span class="pl p-${esc(a.placement)}">${esc(a.label)}</span>
-        <span class="adv">${esc(a.advertiser || '광고주 미상')}</span>
+        <span class="adv">${esc(a.advertiser || '광고주 미상')}${a.aka ? ` <small class="aka">${esc(a.aka)}</small>` : ''}</span>
         <span class="ti">${esc(a.title)}</span>
         <span class="dm">${esc(a.landing_domain || '')} · ${esc((a.first_seen || '').slice(5,16).replace('T',' '))}</span></div>
     </div>`;
 }
-const match = (a, k) => [a.advertiser, a.title, a.landing_domain, a.cta, a.landing_url, a.label].join(' ').toLowerCase().includes(k);
+const match = (a, k) => [a.advertiser, a.aka, a.title, a.landing_domain, a.cta, a.landing_url, a.label].join(' ').toLowerCase().includes(k);
 let renderSeq = 0;
 async function render(){
   const k = q.trim().toLowerCase(), my = ++renderSeq;
@@ -539,7 +540,7 @@ function open(id){
     if (od) { a.frames = od.frames; a.landing = od.landing; a.old = false; a.od = true; }
   }
   $('#sheet').innerHTML = `
-    <header><div><div style="color:var(--sub);font-size:12px">${esc(a.label)}</div><h2>${esc(a.advertiser || '광고주 미상')}</h2>
+    <header><div><div style="color:var(--sub);font-size:12px">${esc(a.label)}</div><h2>${esc(a.advertiser || '광고주 미상')}${a.aka ? ` <small class="aka">${esc(a.aka)}</small>` : ''}</h2>
       <div>${esc(a.title)}</div></div><button id="close" type="button" aria-label="닫기"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></header>
     ${a.old ? `<div class="odbox" id="odBox"><span>오래된 광고라 ${a.frames.length ? '저화질 미리보기 1컷만' : '미리보기 없이 정보만'} 보여요.</span>
       <button type="button" id="odLoad">고화질 원본 불러오기 · 30P</button></div>` : ''}
