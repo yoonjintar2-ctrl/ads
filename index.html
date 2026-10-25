@@ -56,7 +56,7 @@ h1{margin:0;font-size:21px;display:flex;align-items:center;gap:8px}
 .logo{display:flex;flex-direction:column;gap:6px}
 .bw{display:flex;align-items:center;gap:6px;min-height:12px}
 .bw .dots{display:inline-flex;gap:3px}.bw .dots i{width:8px;height:8px;border-radius:2px;background:var(--chip);display:inline-block}
-.bw .dots i.on{background:var(--ok)}
+.bw .dots i.on{background:var(--ok)}.bw .dots i.ext{background:#2f6fde}
 .more{display:block;margin:6px 0 14px;font-size:13px;color:var(--sub)}
 .accbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-left:auto}
 .accbar button{font:inherit;font-size:13px;font-weight:700;border:1px solid var(--line);background:var(--card);color:var(--fg);border-radius:99px;padding:5px 12px;cursor:pointer}
@@ -347,7 +347,7 @@ const goHome = () => { history.scrollRestoration = 'manual'; history.replaceStat
 $('#home').onclick = goHome; $('#home').onkeydown = e => { if (e.key === 'Enter') goHome(); };
 refreshMe();
 
-const SITE_VER = '7a8d5fec89';   // 사이트 갱신 때 자동으로 채워짐(새 버전이 올라오면 열린 페이지가 알아서 새로고침)
+const SITE_VER = 'ba325acb9e';   // 사이트 갱신 때 자동으로 채워짐(새 버전이 올라오면 열린 페이지가 알아서 새로고침)
 const FB_TOPIC = 'gaejab-fb-0e6815c847ac';
 // 보낸 피드백은 PC가 받아 사이트에 반영할 때까지 이 기기에 임시로 보여줌
 function pendingFb(){ try { return JSON.parse(localStorage.getItem('gj_fb_pending') || '[]'); } catch(e) { return []; } }
@@ -392,9 +392,11 @@ async function load(){
   FRAMES.forEach(f => { const im = new Image(); im.src = f; });   // 미리 받아 두기
   if (FRAMES.length && !$('#live').src) $('#live').src = FRAMES[0];
   $('#action').textContent = on ? '▶ ' + (c.action || '수집 중') : '■ 수집기 꺼짐';
-  const nb = on ? (c.browsers || 0) : 0, nt = Math.max(nb, c.browsers_target || 0, 1);
-  $('#bw').innerHTML = on && nb ? `<span class="dots">${Array.from({length: Math.max(nt, 5)}, (_, i) => `<i class="${i < nb ? 'on' : ''}"></i>`).join('')}</span>브라우저 <b>${nb}</b>` : (on ? '브라우저 확인 중' : '브라우저 <b>0</b>');
   const pt = DATA.participants || {}, pn = fresh ? (pt.collecting || 0) : 0, po = fresh ? (pt.online || 0) : 0;
+  const nb = on ? (c.browsers || 0) : 0, nx = fresh ? (pt.browsers || 0) : 0, tot = nb + nx;   // 중앙 PC + 보조·참여 PC 브라우저
+  const nt = Math.max(nb, c.browsers_target || 0, 1) + nx;
+  $('#bw').innerHTML = tot ? `<span class="dots">${Array.from({length: Math.max(nt, 5)}, (_, i) => `<i class="${i < nb ? 'on' : i < tot ? 'ext' : ''}"></i>`).join('')}</span>브라우저 <b>${tot}</b>` : (on ? '브라우저 확인 중' : '브라우저 <b>0</b>');
+  $('#bw').title = `중앙 PC ${nb}개` + (nx ? ` · 보조·참여 PC ${nx}개` : '');
   $('#pcs').innerHTML = `<i class="${pn ? '' : 'off'}"></i>참여 PC <b>${pn}</b>${po > pn ? `<span style="opacity:.7">· 쉬는 중 ${po - pn}</span>` : ''}`;
   $('#nosig').hidden = !!on; $('#led').className = 'led' + (on ? ' on' : '');
   $('#nosig span').textContent = fresh ? '지금은 수집하고 있지 않아요' : '수집 PC와 연결이 끊겼어요 · 지금은 수집하고 있지 않아요';

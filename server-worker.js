@@ -47,6 +47,9 @@ let schemaReady = false;
 async function ensureSchema(db) {
   if (schemaReady) return;
   for (const stmt of SCHEMA.split(";").map((x) => x.trim()).filter(Boolean)) await db.prepare(stmt).run();
+  for (const col of ["browsers INTEGER DEFAULT 0", "kind TEXT DEFAULT 'agent'"]) {   // 예전 표에 칸 추가
+    try { await db.prepare(`ALTER TABLE agents_live ADD COLUMN ${col}`).run(); } catch (e) { /* 이미 있음 */ }
+  }
   schemaReady = true;
 }
 
@@ -201,11 +204,12 @@ export default {
       // 참여 PC 현황(2분마다 한 번 · 사이트에 '참여 PC n대'로 표시)
       if (p === "/api/agent/beat" && req.method === "POST") {
         const a = await auth(req, db); if (!a || a.kind !== "agent") return E(req, "수집기 로그인이 필요해요", 401);
-        const { aid, state } = await req.json();
+        const { aid, state, browsers, kind } = await req.json();
+        const nb = Math.max(0, Math.min(8, parseInt(browsers, 10) || 0)), kd = kind === "helper" ? "helper" : "agent";
         if (!/^[a-f0-9]{16,32}$/.test(String(aid || "")) || !["collecting", "resting", "paused", "idle", "off"].includes(state)) return E(req, "잘못된 데이터예요");
         if (state === "off") await db.prepare("DELETE FROM agents_live WHERE aid = ?").bind(aid).run();
-        else await db.prepare("INSERT INTO agents_live (aid, user_id, state, at) VALUES (?,?,?,?) ON CONFLICT(aid) DO UPDATE SET user_id = excluded.user_id, state = excluded.state, at = excluded.at")
-          .bind(aid, a.user_id, state, now()).run();
+        else await db.prepare("INSERT INTO agents_live (aid, user_id, state, at, browsers, kind) VALUES (?,?,?,?,?,?) ON CONFLICT(aid) DO UPDATE SET user_id = excluded.user_id, state = excluded.state, at = excluded.at, browsers = excluded.browsers, kind = excluded.kind")
+          .bind(aid, a.user_id, state, now(), nb, kd).run();
         return J(req, { ok: true, every: 120 });
       }
       if (p === "/api/agent/upload" && req.method === "POST") {
@@ -320,11 +324,12 @@ export default {
           const u = await db.prepare("SELECT COUNT(*) n FROM users").first();
           const pend = await db.prepare("SELECT COUNT(*) n FROM inbox_log WHERE status = 'pending'").first();
           const since = new Date(Date.now() - 5 * 60e3).toISOString();
-          const live = (await db.prepare("SELECT state, COUNT(*) n FROM agents_live WHERE at > ? GROUP BY state").bind(since).all()).results;
+          const live = (await db.prepare("SELECT state, COUNT(*) n, SUM(CASE WHEN state = 'collecting' THEN browsers ELSE 0 END) nb, SUM(CASE WHEN kind = 'helper' THEN 1 ELSE 0 END) nh FROM agents_live WHERE at > ? GROUP BY state").bind(since).all()).results;
           await db.prepare("DELETE FROM agents_live WHERE at < ?").bind(new Date(Date.now() - 864e5).toISOString()).run();
           const by = Object.fromEntries(live.map((r) => [r.state, r.n]));
           const online = live.reduce((x, r) => x + r.n, 0);
-          return J(req, { ok: true, users: u.n, pending: pend.n, participants: { online, collecting: by.collecting || 0, resting: (by.resting || 0) + (by.paused || 0), idle: by.idle || 0 } });
+          return J(req, { ok: true, users: u.n, pending: pend.n, participants: { online, collecting: by.collecting || 0, resting: (by.resting || 0) + (by.paused || 0), idle: by.idle || 0,
+            browsers: live.reduce((x, r) => x + (r.nb || 0), 0), helpers: live.reduce((x, r) => x + (r.nh || 0), 0) } });
         }
       }
       if (p === "/api/ping") return J(req, { ok: true, at: now() });
