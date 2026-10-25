@@ -38,7 +38,8 @@ CREATE TABLE IF NOT EXISTS od_requests (id INTEGER PRIMARY KEY AUTOINCREMENT, us
 CREATE INDEX IF NOT EXISTS od_status ON od_requests(status, id);
 CREATE TABLE IF NOT EXISTS signup_rl (ip_hash TEXT, at TEXT);
 CREATE TABLE IF NOT EXISTS sightings (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT, ad_key TEXT, placement TEXT, context TEXT, at TEXT);
-CREATE TABLE IF NOT EXISTS config (k TEXT PRIMARY KEY, v TEXT);`;
+CREATE TABLE IF NOT EXISTS config (k TEXT PRIMARY KEY, v TEXT);
+CREATE TABLE IF NOT EXISTS agents_live (aid TEXT PRIMARY KEY, user_id TEXT, state TEXT, at TEXT);`;
 let schemaReady = false;
 async function ensureSchema(db) {
   if (schemaReady) return;
@@ -179,6 +180,16 @@ export default {
         const a = await auth(req, db); if (!a || a.kind !== "agent") return E(req, "수집기 로그인이 필요해요", 401);
         return J(req, { ok: true, points: POINTS, limits: LIMITS, me: await me(db, a.user_id) });
       }
+      // 참여 PC 현황(2분마다 한 번 · 사이트에 '참여 PC n대'로 표시)
+      if (p === "/api/agent/beat" && req.method === "POST") {
+        const a = await auth(req, db); if (!a || a.kind !== "agent") return E(req, "수집기 로그인이 필요해요", 401);
+        const { aid, state } = await req.json();
+        if (!/^[a-f0-9]{16,32}$/.test(String(aid || "")) || !["collecting", "resting", "paused", "idle", "off"].includes(state)) return E(req, "잘못된 데이터예요");
+        if (state === "off") await db.prepare("DELETE FROM agents_live WHERE aid = ?").bind(aid).run();
+        else await db.prepare("INSERT INTO agents_live (aid, user_id, state, at) VALUES (?,?,?,?) ON CONFLICT(aid) DO UPDATE SET user_id = excluded.user_id, state = excluded.state, at = excluded.at")
+          .bind(aid, a.user_id, state, now()).run();
+        return J(req, { ok: true, every: 120 });
+      }
       if (p === "/api/agent/upload" && req.method === "POST") {
         const a = await auth(req, db); if (!a || a.kind !== "agent") return E(req, "수집기 로그인이 필요해요", 401);
         if (+(req.headers.get("Content-Length") || 0) > LIMITS.bodyMax) return E(req, "파일이 너무 커요", 413);
@@ -266,7 +277,12 @@ export default {
         if (p === "/api/admin/stats") {
           const u = await db.prepare("SELECT COUNT(*) n FROM users").first();
           const pend = await db.prepare("SELECT COUNT(*) n FROM inbox_log WHERE status = 'pending'").first();
-          return J(req, { ok: true, users: u.n, pending: pend.n });
+          const since = new Date(Date.now() - 5 * 60e3).toISOString();
+          const live = (await db.prepare("SELECT state, COUNT(*) n FROM agents_live WHERE at > ? GROUP BY state").bind(since).all()).results;
+          await db.prepare("DELETE FROM agents_live WHERE at < ?").bind(new Date(Date.now() - 864e5).toISOString()).run();
+          const by = Object.fromEntries(live.map((r) => [r.state, r.n]));
+          const online = live.reduce((x, r) => x + r.n, 0);
+          return J(req, { ok: true, users: u.n, pending: pend.n, participants: { online, collecting: by.collecting || 0, resting: (by.resting || 0) + (by.paused || 0), idle: by.idle || 0 } });
         }
       }
       if (p === "/api/ping") return J(req, { ok: true, at: now() });

@@ -32,11 +32,26 @@ html{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset
 body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.55 var(--sans);
   padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:18px 48px}
 .wrap{max-width:480px;margin:0 auto;display:grid;gap:18px}   /* PC에서도 모바일과 같은 한 줄 화면 */
-header{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+header{display:grid;gap:10px}
+.hrow{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.tools{display:flex;gap:4px}
+.tool{all:unset;box-sizing:border-box;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;min-width:46px;padding:6px 4px;border-radius:12px;color:var(--fg)}
+.tool:hover,.tool:focus-visible{background:var(--chip)}
+.tool svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.tool small{font-size:10.5px;font-weight:700;color:var(--sub);line-height:1;white-space:nowrap}
+.tool.on small{color:var(--fg)}
+.tool.on svg{color:#E0312B}
+.srow{display:flex;align-items:center;gap:14px;padding:9px 12px;border:1px solid var(--line);border-radius:12px;background:var(--card);font:600 12px/1 var(--sans);color:var(--sub);white-space:nowrap;overflow:hidden}
+.srow b{color:var(--fg);font-family:var(--mono)}
+.srow .upd{font-size:11px}
+@media (max-width:370px){.srow .upd{display:none}}
+.srow .upd{margin-left:auto}
+.pcs:empty{display:none}
+.pcs{display:flex;align-items:center;gap:5px}.pcs i{width:8px;height:8px;border-radius:50%;background:#2f6fde;display:inline-block}.pcs i.off{background:var(--chip)}
 h1{margin:0;font-size:21px;display:flex;align-items:center;gap:8px}
 .brand{position:relative;display:flex;align-items:center;gap:10px;line-height:1}
 .logo{display:flex;flex-direction:column;gap:6px}
-.bw{font:600 12px/1 var(--mono);color:var(--sub);display:flex;align-items:center;gap:6px;min-height:12px}
+.bw{display:flex;align-items:center;gap:6px;min-height:12px}
 .bw .dots{display:inline-flex;gap:3px}.bw .dots i{width:8px;height:8px;border-radius:2px;background:var(--chip);display:inline-block}
 .bw .dots i.on{background:var(--ok)}
 .more{display:block;margin:6px 0 14px;font-size:13px;color:var(--sub)}
@@ -175,14 +190,18 @@ a{color:var(--fg);text-underline-offset:3px}
 <body>
 <div class="wrap">
   <header>
-    <div class="logo"><h1 class="brand" aria-label="게재나라"><svg class="mark" viewBox="0 0 64 64" aria-hidden="true">
+    <div class="hrow">
+      <h1 class="brand" aria-label="게재나라"><svg class="mark" viewBox="0 0 64 64" aria-hidden="true">
         <g fill="none" stroke="#E0312B" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22V9a3 3 0 0 1 3-3h13M42 6h13a3 3 0 0 1 3 3v13M58 42v13a3 3 0 0 1-3 3H42M22 58H9a3 3 0 0 1-3-3V42"/></g>
         <path class="play" d="M25 20.5v23a2 2 0 0 0 3 1.7l19-11.5a2 2 0 0 0 0-3.4l-19-11.5a2 2 0 0 0-3 1.7z" fill="#E0312B"/>
       </svg><span class="word">게재나라</span><span class="rec" id="rec"></span></h1>
-      <div class="bw" id="bw"></div></div>
-    <span class="upd" id="upd"></span>
-    <a class="upd" id="fbAll" href="#" style="color:inherit">💬 전체 피드백 남기기</a>
-    <span class="accbar"><a href="join.html" class="joinlink">💻 참여하고 포인트 받기</a><button type="button" id="accBtn">로그인 · 가입</button></span>
+      <nav class="tools">
+        <a class="tool" id="fbAll" href="#" aria-label="전체 피드백 남기기"><svg viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v8a2.5 2.5 0 0 1-2.5 2.5H10l-4.5 4v-4h0A1.5 1.5 0 0 1 4 14.5z"/></svg><small>의견</small></a>
+        <a class="tool" href="join.html" aria-label="참여하고 포인트 받기"><svg viewBox="0 0 24 24"><rect x="4" y="4.5" width="16" height="11" rx="1.8"/><path d="M2 19.5h20M12 7.5v5M9.5 10h5"/></svg><small>참여</small></a>
+        <button class="tool" type="button" id="accBtn" aria-label="로그인 · 가입"><svg viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="3.8"/><path d="M4.5 20a7.5 7.5 0 0 1 15 0"/></svg><small id="accLbl">로그인</small></button>
+      </nav>
+    </div>
+    <div class="srow"><span class="bw" id="bw"></span><span class="pcs" id="pcs"></span><span class="upd" id="upd"></span></div>
   </header>
 
   <section class="top">
@@ -254,8 +273,8 @@ async function api(path, body){
 function setToken(t){ ACC.token = t || ''; try { t ? localStorage.setItem('gj_tok', t) : localStorage.removeItem('gj_tok'); } catch(e) {} }
 function renderAcc(){
   const b = $('#accBtn');
-  if (ACC.me) { b.textContent = `${ACC.me.id} · ${ACC.me.points.toLocaleString()}P`; b.classList.add('on'); }
-  else { b.textContent = '로그인 · 가입'; b.classList.remove('on'); }
+  if (ACC.me) { $('#accLbl').textContent = ACC.me.points.toLocaleString() + 'P'; b.classList.add('on'); b.setAttribute('aria-label', ACC.me.id + ' 내 정보'); }
+  else { $('#accLbl').textContent = '로그인'; b.classList.remove('on'); b.setAttribute('aria-label', '로그인 · 가입'); }
 }
 async function refreshMe(){
   if (!ACC.token) { ACC.me = null; renderAcc(); return; }
@@ -308,7 +327,7 @@ function openAcc(msg, mode){
 $('#accBtn').onclick = () => openAcc();
 refreshMe();
 
-const SITE_VER = '3fdc378aa7';   // 사이트 갱신 때 자동으로 채워짐(새 버전이 올라오면 열린 페이지가 알아서 새로고침)
+const SITE_VER = '7a4361554a';   // 사이트 갱신 때 자동으로 채워짐(새 버전이 올라오면 열린 페이지가 알아서 새로고침)
 const FB_TOPIC = 'gaejab-fb-0e6815c847ac';
 // 보낸 피드백은 PC가 받아 사이트에 반영할 때까지 이 기기에 임시로 보여줌
 function pendingFb(){ try { return JSON.parse(localStorage.getItem('gj_fb_pending') || '[]'); } catch(e) { return []; } }
@@ -347,14 +366,16 @@ async function load(){
   const fresh = DATA.updated_at && (Date.now() - new Date(DATA.updated_at).getTime() < 20*60e3);
   const on = fresh && c.running;
   $('.brand').classList.toggle('on', !!on);
-  $('#upd').textContent = DATA.updated_at ? DATA.updated_at.slice(5,16).replace('T',' ') + ' 갱신' : '';
+  $('#upd').textContent = DATA.updated_at ? DATA.updated_at.slice(11,16) + ' 갱신' : '';
   FRAMES = (DATA.live_frames && DATA.live_frames.length ? DATA.live_frames : (DATA.live ? [DATA.live] : []))
     .map(f => f + '?t=' + DATA.updated_at);
   FRAMES.forEach(f => { const im = new Image(); im.src = f; });   // 미리 받아 두기
   if (FRAMES.length && !$('#live').src) $('#live').src = FRAMES[0];
   $('#action').textContent = on ? '▶ ' + (c.action || '수집 중') : '■ 수집기 꺼짐';
   const nb = on ? (c.browsers || 0) : 0, nt = Math.max(nb, c.browsers_target || 0, 1);
-  $('#bw').innerHTML = on && nb ? `<span class="dots">${Array.from({length: Math.max(nt, 5)}, (_, i) => `<i class="${i < nb ? 'on' : ''}"></i>`).join('')}</span>수집 브라우저 ${nb}개 가동 중` : (on ? '수집 브라우저 확인 중' : '수집 브라우저 0개');
+  $('#bw').innerHTML = on && nb ? `<span class="dots">${Array.from({length: Math.max(nt, 5)}, (_, i) => `<i class="${i < nb ? 'on' : ''}"></i>`).join('')}</span>브라우저 <b>${nb}</b>` : (on ? '브라우저 확인 중' : '브라우저 <b>0</b>');
+  const pt = DATA.participants || {}, pn = fresh ? (pt.collecting || 0) : 0, po = fresh ? (pt.online || 0) : 0;
+  $('#pcs').innerHTML = `<i class="${pn ? '' : 'off'}"></i>참여 PC <b>${pn}</b>${po > pn ? `<span style="opacity:.7">· 쉬는 중 ${po - pn}</span>` : ''}`;
   $('#nosig').hidden = !!on; $('#led').className = 'led' + (on ? ' on' : '');
   $('#nosig span').textContent = fresh ? '지금은 수집하고 있지 않아요' : '수집 PC와 연결이 끊겼어요 · 지금은 수집하고 있지 않아요';
   const t = DATA.today || {};
