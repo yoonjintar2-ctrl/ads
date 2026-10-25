@@ -218,7 +218,7 @@ function zshow(){ $('#zoom img').src = ZL[zi] || ''; const many = ZL.length > 1;
 ['gesturestart','gesturechange'].forEach(ev => document.addEventListener(ev, e => { if (!e.target.closest || !e.target.closest('#zoom')) e.preventDefault(); }, {passive:false}));
 document.addEventListener('touchmove', e => { if (e.touches.length > 1 && !e.target.closest('#zoom')) e.preventDefault(); }, {passive:false});
 (() => { let last = 0; document.addEventListener('touchend', e => { const n = Date.now(); if (n - last < 300 && !e.target.closest('#zoom, textarea, input')) e.preventDefault(); last = n; }, {passive:false}); })();
-const SITE_VER = '46faa2a2a7';   // 사이트 갱신 때 자동으로 채워짐(새 버전이 올라오면 열린 페이지가 알아서 새로고침)
+const SITE_VER = '1985f087b1';   // 사이트 갱신 때 자동으로 채워짐(새 버전이 올라오면 열린 페이지가 알아서 새로고침)
 const FB_TOPIC = 'gaejab-fb-0e6815c847ac';
 // 보낸 피드백은 PC가 받아 사이트에 반영할 때까지 이 기기에 임시로 보여줌
 function pendingFb(){ try { return JSON.parse(localStorage.getItem('gj_fb_pending') || '[]'); } catch(e) { return []; } }
