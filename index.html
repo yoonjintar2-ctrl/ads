@@ -40,6 +40,23 @@ h1{margin:0;font-size:21px;display:flex;align-items:center;gap:8px}
 .bw .dots{display:inline-flex;gap:3px}.bw .dots i{width:8px;height:8px;border-radius:2px;background:var(--chip);display:inline-block}
 .bw .dots i.on{background:var(--ok)}
 .more{display:block;margin:6px 0 14px;font-size:13px;color:var(--sub)}
+.accbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-left:auto}
+.accbar button,.accsheet button{font:inherit;font-size:13px;font-weight:700;border:1px solid var(--line);background:var(--card);color:var(--fg);border-radius:99px;padding:5px 12px;cursor:pointer}
+.accbar button.on{background:var(--fg);color:var(--bg)}
+.joinlink{font-size:13px;font-weight:700;color:var(--fg)}
+#accDlg{max-width:min(420px,94vw)}
+.accsheet{padding:20px;display:grid;gap:12px}
+.accsheet h2{margin:0;font-size:18px}
+.accsheet input{font:inherit;font-size:16px;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--fg)}
+.accsheet .row{display:flex;gap:8px;justify-content:space-between;align-items:center}
+.accsheet .tabs button.on{background:var(--fg);color:var(--bg)}
+.accsheet .err{color:#d0342c;font-size:13px;min-height:16px}
+.accsheet .pts{font:800 32px/1 var(--mono)}
+.accsheet .led{font-size:13px;color:var(--sub);display:grid;gap:4px;max-height:220px;overflow:auto}
+.accsheet .led div{display:flex;justify-content:space-between}
+.accsheet .note{font-size:12.5px;color:var(--sub);line-height:1.5}
+#toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:99px;font-weight:700;z-index:2147483600;font-size:14px}
+#toast[hidden]{display:none}
 .nothumb{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-size:12px;color:var(--sub);line-height:1.5}
 .nothumb small{font-size:11px;opacity:.8}
 .odbox{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:4px 18px 12px;padding:10px 12px;border-radius:10px;background:var(--chip);font-size:13px;color:var(--sub)}
@@ -165,6 +182,7 @@ a{color:var(--fg);text-underline-offset:3px}
       <div class="bw" id="bw"></div></div>
     <span class="upd" id="upd"></span>
     <a class="upd" id="fbAll" href="#" style="color:inherit">💬 전체 피드백 남기기</a>
+    <span class="accbar"><a href="join.html" class="joinlink">💻 참여하고 포인트 받기</a><button type="button" id="accBtn">로그인 · 가입</button></span>
   </header>
 
   <section class="top">
@@ -200,6 +218,8 @@ a{color:var(--fg);text-underline-offset:3px}
   <div class="feed" id="feed"></div>
 </div>
 
+<dialog id="accDlg"><div class="accsheet" id="accSheet"></div></dialog>
+<div id="toast" hidden></div>
 <dialog id="dlg"><div class="sheet" id="sheet"></div><div id="zoom" hidden><img alt="확대 이미지"><button class="zb zx" type="button" aria-label="닫기">✕</button><button class="zb zp" type="button" aria-label="이전">‹</button><button class="zb zn" type="button" aria-label="다음">›</button><div class="zc"></div></div></dialog>
 
 
@@ -218,7 +238,77 @@ function zshow(){ $('#zoom img').src = ZL[zi] || ''; const many = ZL.length > 1;
 ['gesturestart','gesturechange'].forEach(ev => document.addEventListener(ev, e => { if (!e.target.closest || !e.target.closest('#zoom')) e.preventDefault(); }, {passive:false}));
 document.addEventListener('touchmove', e => { if (e.touches.length > 1 && !e.target.closest('#zoom')) e.preventDefault(); }, {passive:false});
 (() => { let last = 0; document.addEventListener('touchend', e => { const n = Date.now(); if (n - last < 300 && !e.target.closest('#zoom, textarea, input')) e.preventDefault(); last = n; }, {passive:false}); })();
-const SITE_VER = '1985f087b1';   // 사이트 갱신 때 자동으로 채워짐(새 버전이 올라오면 열린 페이지가 알아서 새로고침)
+
+// ── 회원·포인트 ─────────────────────────────
+let API = 'https://gaejab-api.jipsa-e3839b.workers.dev';
+fetch('data/api.json?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.json() : null).then(j => { if (j && j.api) API = j.api; }).catch(() => {});
+const ACC = {token: (() => { try { return localStorage.getItem('gj_tok') || ''; } catch(e) { return ''; } })(), me: null};
+const REASON = {signup: '가입 축하', login: '출석', new_ad: '새 게재면 확보', od: '고화질 원본 불러오기', od_refund: '원본 불러오기 환불'};
+function toast(t){ const el = $('#toast'); el.textContent = t; el.hidden = false; clearTimeout(toast._t); toast._t = setTimeout(() => el.hidden = true, 2600); }
+async function api(path, body){
+  const r = await fetch(API + path, {method: body ? 'POST' : 'GET', headers: {'Content-Type': 'application/json', ...(ACC.token ? {Authorization: 'Bearer ' + ACC.token} : {})}, body: body ? JSON.stringify(body) : undefined});
+  let j = {}; try { j = await r.json(); } catch(e) {}
+  if (!r.ok || j.ok === false) { const e = new Error(j.error || ('오류 ' + r.status)); e.status = r.status; throw e; }
+  return j;
+}
+function setToken(t){ ACC.token = t || ''; try { t ? localStorage.setItem('gj_tok', t) : localStorage.removeItem('gj_tok'); } catch(e) {} }
+function renderAcc(){
+  const b = $('#accBtn');
+  if (ACC.me) { b.textContent = `${ACC.me.id} · ${ACC.me.points.toLocaleString()}P`; b.classList.add('on'); }
+  else { b.textContent = '로그인 · 가입'; b.classList.remove('on'); }
+}
+async function refreshMe(){
+  if (!ACC.token) { ACC.me = null; renderAcc(); return; }
+  try { const j = await api('/api/me'); ACC.me = j.me; if (j.bonus) toast(`출석 포인트 +${j.bonus}P`); }
+  catch(e) { if (e.status === 401) setToken(''); ACC.me = null; }
+  renderAcc();
+}
+function openAcc(msg, mode){
+  const sh = $('#accSheet');
+  if (ACC.me && !mode) {
+    const m = ACC.me;
+    sh.innerHTML = `<div class="row"><h2>${esc(m.id)}님</h2><button type="button" id="accClose">닫기</button></div>
+      <div><div class="note">내 포인트</div><div class="pts">${m.points.toLocaleString()}P</div></div>
+      <div class="note">참여로 확보해 준 새 게재면 ${m.accepted || 0}개 · 오래된 게재면 고화질 원본은 1건에 30P로 불러올 수 있어요.</div>
+      <div class="led">${(m.ledger || []).map(l => `<div><span>${esc(REASON[l.reason] || l.reason)} · ${esc((l.at || '').slice(5,16).replace('T',' '))}</span><b>${l.delta > 0 ? '+' : ''}${l.delta}P</b></div>`).join('') || '<div>아직 내역이 없어요</div>'}</div>
+      <a href="join.html" class="joinlink">💻 내 컴퓨터로 참여하고 포인트 받기 →</a>
+      <div class="row"><span></span><button type="button" id="accOut">로그아웃</button></div>`;
+    $('#accClose').onclick = () => $('#accDlg').close();
+    $('#accOut').onclick = async () => { try { await api('/api/logout', {}); } catch(e) {} setToken(''); ACC.me = null; renderAcc(); $('#accDlg').close(); toast('로그아웃했어요'); };
+  } else {
+    let tab = mode === 'signup' ? 'signup' : 'login';
+    const draw = () => {
+      sh.innerHTML = `<div class="row"><h2>${tab === 'login' ? '로그인' : '간단 가입'}</h2><button type="button" id="accClose">닫기</button></div>
+        ${msg ? `<div class="note">${esc(msg)}</div>` : ''}
+        <div class="row tabs"><button type="button" data-t="login" class="${tab === 'login' ? 'on' : ''}">로그인</button><button type="button" data-t="signup" class="${tab === 'signup' ? 'on' : ''}">가입</button><span></span></div>
+        <input id="accId" placeholder="아이디 (영문 소문자·숫자 3~20자)" autocomplete="username" autocapitalize="none" spellcheck="false">
+        <input id="accPw" type="password" placeholder="비밀번호 (6자 이상)" autocomplete="${tab === 'login' ? 'current-password' : 'new-password'}">
+        <div class="err" id="accErr"></div>
+        <button type="button" id="accGo">${tab === 'login' ? '로그인' : '가입하고 30P 받기'}</button>
+        <div class="note">이메일·전화번호 같은 개인정보는 받지 않아요. 비밀번호는 서버에 원문이 아니라 복원할 수 없는 형태로만 저장돼요. 로그인하면 하루 한 번 출석 포인트 10P가 쌓여요.</div>`;
+      $('#accClose').onclick = () => $('#accDlg').close();
+      sh.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { tab = b.dataset.t; draw(); });
+      const go = async () => {
+        const id = $('#accId').value.trim().toLowerCase(), pw = $('#accPw').value;
+        $('#accGo').disabled = true; $('#accErr').textContent = '';
+        try {
+          const j = await api(tab === 'login' ? '/api/login' : '/api/signup', {id, pw});
+          setToken(j.token); ACC.me = j.me; renderAcc(); $('#accDlg').close();
+          toast(j.bonus ? `${tab === 'signup' ? '가입 완료! ' : ''}+${j.bonus}P 적립` : '로그인했어요');
+          if (openAcc.after) { const f = openAcc.after; openAcc.after = null; f(); }
+        } catch(e) { $('#accErr').textContent = e.message; }
+        if ($('#accGo')) $('#accGo').disabled = false;
+      };
+      $('#accGo').onclick = go; $('#accPw').onkeydown = e => { if (e.key === 'Enter') go(); };
+    };
+    draw();
+  }
+  if (!$('#accDlg').open) $('#accDlg').showModal();
+}
+$('#accBtn').onclick = () => openAcc();
+refreshMe();
+
+const SITE_VER = '5890268e9b';   // 사이트 갱신 때 자동으로 채워짐(새 버전이 올라오면 열린 페이지가 알아서 새로고침)
 const FB_TOPIC = 'gaejab-fb-0e6815c847ac';
 // 보낸 피드백은 PC가 받아 사이트에 반영할 때까지 이 기기에 임시로 보여줌
 function pendingFb(){ try { return JSON.parse(localStorage.getItem('gj_fb_pending') || '[]'); } catch(e) { return []; } }
@@ -289,10 +379,11 @@ async function loadOriginals(a){
   let m = await odManifest(a.id);
   if (!m) {
     if (!on) { box.innerHTML = '<span>지금 PC 수집기가 꺼져 있어 불러올 수 없어요. PC가 켜지면 다시 눌러 주세요.</span>'; return; }
+    if (!ACC.me) { openAcc.after = () => loadOriginals(a); openAcc('고화질 원본 불러오기는 로그인 후 30P로 이용할 수 있어요.'); return; }
     box.innerHTML = '<span class="spin"></span><span id="odMsg">요청 보내는 중…</span><div class="gauge"><i id="odBar"></i></div>';
     const t0 = Date.now(), since = Math.floor(t0 / 1000) - 5;
-    try { await fetch(`https://ntfy.sh/${OD_TOPIC}`, {method: 'POST', body: JSON.stringify({ad: String(a.id)})}); }
-    catch(e) { box.innerHTML = '<span>요청을 보내지 못했어요. 잠시 후 다시 눌러 주세요.</span>'; return; }
+    try { const j = await api('/api/od', {ad: String(a.id)}); ACC.me = j.me; renderAcc(); toast(`-${j.cost}P · 원본을 불러올게요`); }
+    catch(e) { box.innerHTML = `<span>${esc(e.message)}</span>` + (e.status === 402 ? ' <a href="join.html" class="joinlink">포인트 모으기 →</a>' : ''); return; }
     // 단계: 요청 전송 → PC가 받음 → 원본 올리는 중 → 사이트 반영 대기 → 완료
     const STAGE = {sent: [12, 'PC에 요청 보냄 · 응답 기다리는 중'], received: [25, 'PC가 요청을 받았어요'],
                    uploading: [45, 'PC가 고화질 원본을 올리는 중'], pushed: [70, '업로드 완료 · 사이트에 반영되는 중(1분 안팎)']};
@@ -375,7 +466,7 @@ function open(id){
     <header><div><div style="color:var(--sub);font-size:12px">${esc(a.label)}</div><h2>${esc(a.advertiser || '광고주 미상')}</h2>
       <div>${esc(a.title)}</div></div><button id="close" type="button">닫기</button></header>
     ${a.old ? `<div class="odbox" id="odBox"><span>오래된 광고라 ${a.frames.length ? '저화질 미리보기 1컷만' : '미리보기 없이 정보만'} 보여요.</span>
-      <button type="button" id="odLoad">고화질 원본 불러오기</button></div>` : ''}
+      <button type="button" id="odLoad">고화질 원본 불러오기 · 30P</button></div>` : ''}
     ${a.od ? '<p class="more">PC에서 불러온 고화질 원본이에요.</p>' : ''}
     <div class="frames">${a.frames.map(f => `<figure><img loading="lazy" src="${esc(f.src)}" data-z alt=""><figcaption>${f.low ? '저화질 미리보기' : f.idx + '컷' + (f.t ? ' · ' + f.t.toFixed(1) + '초' : '')}</figcaption></figure>`).join('')}</div>
     <div class="two">
@@ -415,6 +506,7 @@ document.addEventListener('click', e => {
   const f = t.closest('#filters button'); if (f) { place = f.dataset.p; load(); return; }
   const c = t.closest('.ad'); if (c) open(c.dataset.id);
   if (t === $('#dlg')) $('#dlg').close();
+  if (t === $('#accDlg')) $('#accDlg').close();
 });
 $('#dlg').addEventListener('cancel', e => { if (!$('#zoom').hidden) { e.preventDefault(); $('#zoom').hidden = true; } });
 $('#dlg').addEventListener('close', () => { $('#zoom').hidden = true; });
