@@ -343,7 +343,7 @@ const goHome = () => { history.scrollRestoration = 'manual'; history.replaceStat
 $('#home').onclick = goHome; $('#home').onkeydown = e => { if (e.key === 'Enter') goHome(); };
 refreshMe();
 
-const SITE_VER = 'edacb04a5a';   // 사이트 갱신 때 자동으로 채워짐(새 버전이 올라오면 열린 페이지가 알아서 새로고침)
+const SITE_VER = 'e4b2ae1cae';   // 사이트 갱신 때 자동으로 채워짐(새 버전이 올라오면 열린 페이지가 알아서 새로고침)
 const FB_TOPIC = 'gaejab-fb-0e6815c847ac';
 // 보낸 피드백은 PC가 받아 사이트에 반영할 때까지 이 기기에 임시로 보여줌
 function pendingFb(){ try { return JSON.parse(localStorage.getItem('gj_fb_pending') || '[]'); } catch(e) { return []; } }
